@@ -5,7 +5,9 @@ import psycopg2
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:admin@localhost/edu_umida")
+# DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:admin@localhost/edu_umida")
+DATABASE_URL = os.getenv("DATABASE_URL")
+
 
 def get_owner_id():
     conn = psycopg2.connect(DATABASE_URL)

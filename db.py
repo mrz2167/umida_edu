@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine, MetaData, Table, select, update, insert, delete, text
 
-DATABASE_URL = "postgresql://postgres:admin@localhost/edu_umida"
+DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 metadata = MetaData()
 
