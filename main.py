@@ -12,8 +12,11 @@ from db import (
     check_user_role, add_user_role, add_course, add_lesson, 
     update_course_title, update_course_description, get_all_courses,
     update_lesson_title, update_lesson_video, delete_course_and_lessons,
-    update_lesson_homework, update_lesson_material, delete_lesson_by_id, 
-    get_lessons_by_course, get_course_by_id, approve_course_by_id)
+    update_lesson_homework, update_lesson_extra_material_file, 
+    update_lesson_extra_material_link, delete_lesson_by_id, 
+    get_lessons_by_course, get_course_by_id, approve_course_by_id,
+    update_course_lesson_count)
+
 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
@@ -48,6 +51,7 @@ async def menu_command(message: Message):
             "/add_lesson — добавить урок\n"
             "/delete_lesson — удалить урок\n"
             "/courses — просмотр курсов\n"
+            "/sync_lessons — синхронизировать количество уроков\n"
             "/menu — показать это меню\n"
         )
     elif user_id in ADMIN_IDS:
@@ -71,6 +75,31 @@ async def menu_command(message: Message):
                 "У вас нет доступа. Пожалуйста, запросите доступ у администрации."
             )
     await message.answer(text)
+
+async def on_startup(dispatcher):
+    await sync_lessons_auto()
+async def sync_lessons_auto():
+    courses = get_all_courses()
+    for course in courses:
+        actual_count = len(get_lessons_by_course(course["id"]))
+        if course["lesson_count"] != actual_count:
+            update_course_lesson_count(course["id"], actual_count)
+
+@dp.message(Command("sync_lessons"))
+async def sync_lessons_count(message: Message):
+    if message.from_user.id != OWNER_ID:
+        await message.answer("Нет доступа.")
+        return
+
+    courses = get_all_courses()
+    fixed = 0
+    for course in courses:
+        actual_count = len(get_lessons_by_course(course["id"]))
+        if course["lesson_count"] != actual_count:
+            update_course_lesson_count(course["id"], actual_count)
+            fixed += 1
+
+    await message.answer(f"Синхронизация завершена.\nОбновлено курсов: {fixed}")
 
 
 class AccessRequest(StatesGroup):
@@ -152,11 +181,13 @@ async def decline_request(callback: CallbackQuery):
 class CourseCreation(StatesGroup):
     waiting_for_title = State()
     waiting_for_description = State()
+    waiting_for_number_course = State()
     waiting_for_lesson_count = State()
     waiting_for_lesson_title = State()
     waiting_for_lesson_video = State()
     waiting_for_homework = State()
-    waiting_for_extra_material = State()
+    waiting_for_extra_material_link = State()
+    waiting_for_extra_material_file = State()
 @dp.message(Command("add_course"))
 async def start_course_creation(message: Message, state: FSMContext):
     if message.from_user.id != OWNER_ID:
@@ -175,8 +206,15 @@ async def process_description(message: Message, state: FSMContext):
     description = message.text.strip()
     if description == "-":
         description = ""
-    
     await state.update_data(description=description)
+    await message.answer("Введите номер курса по счету (например, 1, 2, 3...):")
+    await state.set_state(CourseCreation.waiting_for_number_course)
+@dp.message(CourseCreation.waiting_for_number_course)
+async def process_number_course(message: Message, state: FSMContext):
+    if not message.text.isdigit() or int(message.text) < 1:
+        await message.answer("Введите корректный номер курса (целое число).")
+        return
+    await state.update_data(number_course=int(message.text))
     await message.answer("Введите количество занятий:")
     await state.set_state(CourseCreation.waiting_for_lesson_count)
 @dp.message(CourseCreation.waiting_for_lesson_count)
@@ -194,49 +232,98 @@ async def process_lesson_title(message: Message, state: FSMContext):
     lesson_index = data["lesson_index"]
     lessons = data["lessons"]
 
-    lessons.append({"title": message.text.strip(), "video": None, "homework": None, "extra_material": None})
+    lessons.append({
+        "title": message.text.strip(),
+        "video": None,
+        "homework": None,
+        "extra_material_file": None,
+        "extra_material_link": None
+    })
     await state.update_data(lessons=lessons)
-    await message.answer("Теперь отправьте видеофайл к этому занятию:")
+    await message.answer("Теперь отправьте видеофайл к этому занятию или «-» для пропуска.")
     await state.set_state(CourseCreation.waiting_for_lesson_video)
-@dp.message(CourseCreation.waiting_for_lesson_video, F.video)
+@dp.message(CourseCreation.waiting_for_lesson_video)
 async def process_lesson_video(message: Message, state: FSMContext):
+    if message.text and message.text.strip() == "-":
+        data = await state.get_data()
+        lesson_index = data["lesson_index"]
+        lessons = data["lessons"]
+        lessons[lesson_index]["video"] = None
+        await state.update_data(lessons=lessons)
+
+        await message.answer("Теперь отправьте домашнее задание:")
+        await state.set_state(CourseCreation.waiting_for_homework)
+        return
+
+    if not message.video:
+        await message.answer("Отправьте видеофайл или «-» для пропуска.")
+        return
+
     data = await state.get_data()
     lesson_index = data["lesson_index"]
     lessons = data["lessons"]
 
     lessons[lesson_index]["video"] = message.video.file_id
     await state.update_data(lessons=lessons)
-    await message.answer("Теперь отправьте домашнее заданием:")
+
+    await message.answer("Теперь отправьте домашнее задание:")
     await state.set_state(CourseCreation.waiting_for_homework)
 @dp.message(CourseCreation.waiting_for_homework)
 async def process_homework_text(message: Message, state: FSMContext):
-    await state.update_data(homework=message.text.strip())
-    await message.answer("Отправьте дополнительный материал в формате .docx (если есть) или напишите «-», чтобы пропустить:")
-    await state.set_state(CourseCreation.waiting_for_extra_material)
-@dp.message(CourseCreation.waiting_for_extra_material)
-async def process_additional_material(message: Message, state: FSMContext):
+    data = await state.get_data()
+    lesson_index = data["lesson_index"]
+    lessons = data["lessons"]
+
+    lessons[lesson_index]["homework"] = message.text.strip()
+    await state.update_data(lessons=lessons)
+    await message.answer("Отправьте ссылку на дополнительный материал (если есть) или «-», чтобы пропустить:")
+    await state.set_state(CourseCreation.waiting_for_extra_material_link)  
+@dp.message(CourseCreation.waiting_for_extra_material_link)
+async def ask_extra_material_link(message: Message, state: FSMContext):
+    data = await state.get_data()
+    lesson_index = data["lesson_index"]
+    lessons = data["lessons"]
+
     if message.text and message.text.strip() == "-":
-        await state.update_data(additional_material=None)
-        await finalize_homework(message, state)
-    elif message.document and message.document.file_name.endswith(".docx"):
-        await state.update_data(additional_material=message.document.file_id)
-        await finalize_homework(message, state)
+        lessons[lesson_index]["extra_material_link"] = None
     else:
-        await message.answer("Пожалуйста, отправьте .docx файл или напишите «-» для пропуска.")
+        lessons[lesson_index]["extra_material_link"] = message.text.strip()
+    await state.update_data(lessons=lessons)
+    await message.answer("Отправьте файл (.docx, .pdf и т.д.) или «-» для пропуска:")
+    await state.set_state(CourseCreation.waiting_for_extra_material_file)
+@dp.message(CourseCreation.waiting_for_extra_material_file)
+async def process_extra_material_file(message: Message, state: FSMContext):
+    data = await state.get_data()
+    lessons = data["lessons"]
+    lesson_index = data["lesson_index"]
+
+    file_id = None
+    if message.document:
+        file_id = message.document.file_id
+    elif message.text and message.text.strip() == "-":
+        file_id = None
+    else:
+        await message.answer("Отправьте файл или «-» для пропуска.")
+        return
+
+    lessons[lesson_index]["extra_material_file"] = file_id
+    await state.update_data(lessons=lessons)
+
+    await finalize_homework(message, state)
 async def finalize_homework(message: Message, state: FSMContext):
     data = await state.get_data()
     lesson_index = data["lesson_index"]
     lessons = data["lessons"]
 
-    # Обновляем текущий урок
-    lessons[lesson_index]["homework"] = data.get("homework")
-    lessons[lesson_index]["extra_material"] = data.get("additional_material")
-
     await state.update_data(lessons=lessons)
 
-    # Проверяем, все ли уроки введены
     if lesson_index + 1 < data["lesson_total"]:
-        await state.update_data(lesson_index=lesson_index + 1, homework=None, additional_material=None)
+        await state.update_data(
+            lesson_index=lesson_index + 1,
+            homework=None,
+            extra_material_link=None,
+            extra_material_file=None
+        )
         await message.answer(f"Введите название занятия {lesson_index + 2} из {data['lesson_total']}:")
         await state.set_state(CourseCreation.waiting_for_lesson_title)
     else:
@@ -246,20 +333,32 @@ async def finalize_homework(message: Message, state: FSMContext):
 def get_lesson_buttons(course_id):
     lessons = get_lessons_by_course(course_id)
     return [
-        [InlineKeyboardButton(text=f"Урок {i+1}", callback_data=f"view_lesson_{course_id}_{i}")]
-        for i in range(len(lessons))
+        [InlineKeyboardButton(text=f"Урок {i+1}: {lesson['title']}", callback_data=f"view_lesson_{course_id}_{i}")]
+        for i, lesson in enumerate(lessons)
     ]
-async def save_course_to_db(user_id: int, state: FSMContext):     
+async def save_course_to_db(user_id: int, state: FSMContext):
     data = await state.get_data()
     approved = False
     lesson_count = data["lesson_total"]
 
     course_id = add_course(
-        data["title"], data["description"], lesson_count, user_id, approved
+        data["title"], 
+        data["description"], 
+        lesson_count, 
+        user_id, 
+        approved, 
+        data.get("number_course") 
     )
 
     for lesson in data["lessons"]:
-        add_lesson(course_id, lesson["title"], lesson["video"], lesson["homework"], lesson["extra_material"])
+        add_lesson(
+            course_id,
+            lesson["title"],
+            lesson.get("video") or lesson.get("video_file_id"),             
+            lesson["homework"],
+            lesson["extra_material_file"],
+            lesson["extra_material_link"]
+        )
 
     await bot.send_message(user_id, f"✅ Курс \"{data['title']}\" сохранён (статус: на модерации).")
 
@@ -279,7 +378,7 @@ async def save_course_to_db(user_id: int, state: FSMContext):
         reply_markup=markup
     )
 
-@dp.callback_query(F.data.startswith("view_lesson_"))
+@dp.callback_query(F.data.regexp(r"^view_lesson_\d+_\d+$"))
 async def view_lesson(callback: CallbackQuery):
     _, _, course_id, lesson_idx = callback.data.split("_")
     lessons = get_lessons_by_course(int(course_id))
@@ -287,24 +386,28 @@ async def view_lesson(callback: CallbackQuery):
     if idx < 0 or idx >= len(lessons):
         await callback.message.answer("Урок не найден.")
         return
+
     lesson = lessons[idx]
-    
     await callback.message.answer(f"<b>№{idx+1}: {lesson['title']}</b>")
-    video_id = lesson.get("video_file_id") or lesson.get("video")  
+
+    video_id = lesson.get("video_file_id") or lesson.get("video")
     if video_id:
         try:
             await callback.message.answer_video(video_id)
         except Exception:
             await callback.message.answer(f"Видео не найдено: {video_id}")
 
-    await callback.message.answer(f"<b>Домашнее задание:</b> {lesson.get('homework', '-')}")
+    homework = lesson.get('homework') or "-"
+    await callback.message.answer(f"<b>Домашнее задание:</b> {homework}")
 
-    extra = lesson.get("extra_materials") or lesson.get("extra_material")
-    if extra:
+    extra_file = lesson.get("extra_material_file")
+    extra_link = lesson.get("extra_material_link") or "-"
+    if extra_file:
         try:
-            await callback.message.answer_document(extra)
+            await callback.message.answer_document(extra_file)
         except Exception:
-            await callback.message.answer(f"Доп. материал не найден: {extra}")
+            await callback.message.answer(f"Файл доп. материала не найден: {extra_file}")
+    await callback.message.answer(f"<b>Ссылка на доп. материал:</b> {extra_link or '-'}")
 
     await callback.answer()
 @dp.callback_query(F.data.startswith("approve_course_"))
@@ -366,7 +469,7 @@ class EditCourse(StatesGroup):
     waiting_for_description = State()
 @dp.callback_query(F.data.regexp(r"^edit_course_title_\d+$"))
 async def edit_course_title(callback: CallbackQuery, state: FSMContext):
-    if message.from_user.id != OWNER_ID:
+    if callback.from_user.id != OWNER_ID:
         await message.answer("Нет доступа.")
         return
     course_id = int(callback.data.split("_")[-1])
@@ -375,7 +478,7 @@ async def edit_course_title(callback: CallbackQuery, state: FSMContext):
     await state.set_state(EditCourse.waiting_for_title)
 @dp.callback_query(F.data.regexp(r"^edit_course_desc_\d+$"))
 async def edit_course_desc(callback: CallbackQuery, state: FSMContext):
-    if message.from_user.id != OWNER_ID:
+    if callback.from_user.id != OWNER_ID:
         await message.answer("Нет доступа.")
         return
     course_id = int(callback.data.split("_")[-1])
@@ -413,51 +516,68 @@ class AddLesson(StatesGroup):
     waiting_for_title = State()
     waiting_for_video = State()
     waiting_for_homework = State()
-    waiting_for_extra_material = State()
+    waiting_for_extra_material_link = State()
+    waiting_for_extra_material_file = State()
 @dp.callback_query(F.data.startswith("add_lesson_"))
 async def add_lesson_to_course(callback: CallbackQuery, state: FSMContext):
-    user_id = message.from_user.id
-    if user_id == OWNER_ID:
+    if callback.from_user.id == OWNER_ID:
         course_id = int(callback.data.split("_")[-1])
         await state.update_data(add_lesson_course_id=course_id)
         await callback.message.edit_text("Введите название нового урока:")
         await state.set_state(AddLesson.waiting_for_title)
     else:
         await callback.message.answer("Нет доступа к этой функции.")
-        return
-
 @dp.message(AddLesson.waiting_for_title)
 async def add_lesson_title(message: Message, state: FSMContext):
     await state.update_data(new_lesson_title=message.text.strip())
-    await message.answer("Отправьте видео для нового урока:")
+    await message.answer("Отправьте видео для нового урока или «-»:")
     await state.set_state(AddLesson.waiting_for_video)
-@dp.message(AddLesson.waiting_for_video, F.video)
+@dp.message(AddLesson.waiting_for_video)
 async def add_lesson_video(message: Message, state: FSMContext):
-    await state.update_data(new_lesson_video=message.video.file_id)
-    await message.answer("Введите домашнее задание для нового урока:")
+    if message.text and message.text.strip() == "-":
+        video = None
+    elif message.video:
+        video = message.video.file_id
+    else:
+        await message.answer("Отправьте видеофайл или «-».")
+        return
+    await state.update_data(new_lesson_video=video)
+    await message.answer("Введите домашнее задание:")
     await state.set_state(AddLesson.waiting_for_homework)
 @dp.message(AddLesson.waiting_for_homework)
 async def add_lesson_homework(message: Message, state: FSMContext):
     await state.update_data(new_lesson_homework=message.text.strip())
-    await message.answer("Отправьте дополнительный материал (.docx) или напишите «-», чтобы пропустить:")
-    await state.set_state(AddLesson.waiting_for_extra_material)
-@dp.message(AddLesson.waiting_for_extra_material)
-async def add_lesson_material(message: Message, state: FSMContext):
-    data = await state.get_data()
-    course_id = data["add_lesson_course_id"]
-    title = data["new_lesson_title"]
-    video = data["new_lesson_video"]
-    homework = data["new_lesson_homework"]
-    if message.text and message.text.strip() == "-":
-        extra = None
-    elif message.document and message.document.file_name.endswith(".docx"):
-        extra = message.document.file_id
+    await message.answer("Отправьте ссылку на доп. материал или «-»:")
+    await state.set_state(AddLesson.waiting_for_extra_material_link)
+@dp.message(AddLesson.waiting_for_extra_material_link)
+async def add_lesson_link(message: Message, state: FSMContext):
+    link = message.text.strip()
+    if link == "-":
+        link = None
+    await state.update_data(new_lesson_extra_link=link)
+    await message.answer("Отправьте файл доп. материала (.docx, .pdf) или «-»:")
+    await state.set_state(AddLesson.waiting_for_extra_material_file)
+@dp.message(AddLesson.waiting_for_extra_material_file)
+async def add_lesson_file(message: Message, state: FSMContext):
+    if message.document:
+        file_id = message.document.file_id
+    elif message.text and message.text.strip() == "-":
+        file_id = None
     else:
-        await message.answer("Пожалуйста, отправьте .docx файл или напишите «-».")
+        await message.answer("Отправьте файл или «-».")
         return
-    add_lesson(course_id, title, video, homework, extra)
-    await message.answer("Новый урок добавлен.")
-    await edit_course_menu(message, course_id)
+
+    data = await state.get_data()
+    add_lesson(
+        data["add_lesson_course_id"],
+        data["new_lesson_title"],
+        data["new_lesson_video"],
+        data["new_lesson_homework"],
+        extra_material_link=data.get("new_lesson_extra_link"),
+        extra_material_file=file_id
+    )
+    await message.answer("Урок добавлен.")
+    await edit_course_menu(message, data["add_lesson_course_id"])
     await state.clear()
 
 class AddLessonGlobal(StatesGroup):
@@ -578,14 +698,18 @@ async def delete_course_choose(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text("Курс и все его уроки удалены.")
     await state.clear()
 
-
 class EditLesson(StatesGroup):
     waiting_for_title = State()
     waiting_for_video = State()
     waiting_for_homework = State()
-    waiting_for_extra_material = State()
+    waiting_for_extra_material_file = State()
+    waiting_for_extra_material_link = State()
 @dp.callback_query(F.data.startswith("choose_lesson_edit_"))
 async def choose_lesson_edit(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id != OWNER_ID:
+        await callback.answer("Нет доступа.", show_alert=True)
+        return
+
     course_id = int(callback.data.split("_")[-1])
     lessons = get_lessons_by_course(course_id)
     kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -602,7 +726,8 @@ async def edit_lesson(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="Название", callback_data=f"edit_lesson_title_{lesson_id}")],
         [InlineKeyboardButton(text="Видео", callback_data=f"edit_lesson_video_{lesson_id}")],
         [InlineKeyboardButton(text="Домашнее задание", callback_data=f"edit_lesson_homework_{lesson_id}")],
-        [InlineKeyboardButton(text="Доп. материал", callback_data=f"edit_lesson_material_{lesson_id}")],
+        [InlineKeyboardButton(text="Файл доп. материала", callback_data=f"edit_lesson_extra_file_{lesson_id}")],
+        [InlineKeyboardButton(text="Ссылка на доп. материал", callback_data=f"edit_lesson_extra_link_{lesson_id}")],
         [InlineKeyboardButton(text="⬅️ Назад", callback_data=f"choose_lesson_edit_{course_id}")]
     ])
     await callback.message.edit_text("Что редактировать в уроке?", reply_markup=kb)
@@ -619,10 +744,15 @@ async def edit_lesson_video(callback: CallbackQuery, state: FSMContext):
 async def edit_lesson_homework(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text("Введите новое домашнее задание:")
     await state.set_state(EditLesson.waiting_for_homework)
-@dp.callback_query(F.data.regexp(r"^edit_lesson_material_\d+$"))
-async def edit_lesson_material(callback: CallbackQuery, state: FSMContext):
-    await callback.message.edit_text("Отправьте новый .docx файл или напишите «-», чтобы удалить материал:")
-    await state.set_state(EditLesson.waiting_for_extra_material)
+@dp.callback_query(F.data.regexp(r"^edit_lesson_extra_file_\d+$"))
+async def edit_lesson_extra_file(callback: CallbackQuery, state: FSMContext):
+    await callback.message.edit_text("Отправьте новый файл доп. материала или напишите «-», чтобы удалить файл:")
+    await state.set_state(EditLesson.waiting_for_extra_material_file)
+@dp.callback_query(F.data.regexp(r"^edit_lesson_extra_link_\d+$"))
+async def edit_lesson_extra_link(callback: CallbackQuery, state: FSMContext):
+    await callback.message.edit_text("Введите новую ссылку на доп. материал или напишите «-», чтобы удалить ссылку:")
+    await state.set_state(EditLesson.waiting_for_extra_material_link)
+
 
 class EditCourseGlobal(StatesGroup):
     waiting_for_course = State()
@@ -645,6 +775,9 @@ async def edit_course_command(message: Message, state: FSMContext):
     await state.set_state(EditCourseGlobal.waiting_for_course)
 @dp.callback_query(F.data.regexp(r"^edit_course_choose_\d+$"), EditCourseGlobal.waiting_for_course)
 async def edit_course_choose(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id != OWNER_ID:
+        await callback.answer("Нет доступа.", show_alert=True)
+        return
     course_id = int(callback.data.split("_")[-1])
     await state.clear()
     await edit_course_menu(callback.message, course_id)
@@ -674,56 +807,89 @@ async def update_lesson_homework_handler(message: Message, state: FSMContext):
     await message.answer("Домашнее задание обновлено.")
     await edit_lesson_menu(message, data["edit_lesson_id"], data["edit_course_id"])
     await state.clear()
-@dp.message(EditLesson.waiting_for_extra_material)
-async def update_lesson_material_handler(message: Message, state: FSMContext):
+@dp.message(EditLesson.waiting_for_extra_material_file)
+async def update_lesson_extra_material_file_handler(message: Message, state: FSMContext):
     data = await state.get_data()
     if message.text and message.text.strip() == "-":
-        update_lesson_material(data["edit_lesson_id"], None)
-        await message.answer("Дополнительный материал удалён.")
-    elif message.document and message.document.file_name.endswith(".docx"):
-        update_lesson_material(data["edit_lesson_id"], message.document.file_id)
-        await message.answer("Дополнительный материал обновлён.")
+        update_lesson_extra_material_file(data["edit_lesson_id"], None)
+        await message.answer("Файл доп. материала удалён.")
+    elif message.document:
+        update_lesson_extra_material_file(data["edit_lesson_id"], message.document.file_id)
+        await message.answer("Файл доп. материала обновлён.")
     else:
-        await message.answer("Пожалуйста, отправьте .docx файл или напишите «-» для удаления.")
+        await message.answer("Пожалуйста, отправьте файл или напишите «-» для удаления.")
         return
     await edit_lesson_menu(message, data["edit_lesson_id"], data["edit_course_id"])
     await state.clear()
-
-@dp.callback_query(F.data == "back_to_main")
-async def back_to_main(callback: CallbackQuery, state: FSMContext):
+@dp.message(EditLesson.waiting_for_extra_material_link)
+async def update_lesson_extra_material_link_handler(message: Message, state: FSMContext):
     data = await state.get_data()
-    course_id = data.get("edit_course_id")
-    await state.clear()
-    if course_id:
-        course = get_course_by_id(course_id)
-        lessons = get_lessons_by_course(course_id)
-        lesson_buttons = [
-            [InlineKeyboardButton(text=lesson["title"], callback_data=f"view_lesson_simple_{lesson['id']}")]
-            for lesson in lessons
-        ]
-        action_buttons = [[
-            InlineKeyboardButton(text="✅ Завершить", callback_data=f"approve_course_{course_id}"),
-            InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_course_{course_id}"),
-            InlineKeyboardButton(text="❌ Отклонить", callback_data=f"decline_course_{course_id}")
-        ]]
-        kb = InlineKeyboardMarkup(inline_keyboard=lesson_buttons + action_buttons)
-        text = (
-            f"<b>Курс:</b> {course['title']}\n"
-            f"<b>Описание:</b> {course['description']}\n\n"
-            "Выберите урок для просмотра или завершите создание курса."
-        )
-        await callback.message.edit_text(text, reply_markup=kb)
+    if message.text and message.text.strip() == "-":
+        update_lesson_extra_material_link(data["edit_lesson_id"], None)
+        await message.answer("Ссылка на доп. материал удалена.")
     else:
-        await callback.message.edit_text("Главное меню. Используйте команды или кнопки для работы с ботом.")
+        update_lesson_extra_material_link(data["edit_lesson_id"], message.text.strip())
+        await message.answer("Ссылка на доп. материал обновлена.")
+    await edit_lesson_menu(message, data["edit_lesson_id"], data["edit_course_id"])
+    await state.clear()
+
+
+@dp.callback_query(F.data == "back_to_courses")
+async def back_to_courses(callback: CallbackQuery):
+    courses = get_all_courses()
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=course["title"], callback_data=f"view_course_{course['id']}")]
+            for course in courses
+        ]
+    )
+    try:
+        await callback.message.edit_text("Список курсов:", reply_markup=kb)
+    except Exception:
+        await callback.message.answer("Список курсов:", reply_markup=kb)
+    await callback.answer()
 @dp.callback_query(F.data.regexp(r"^edit_course_\d+$"))
 async def back_to_edit_course(callback: CallbackQuery, state: FSMContext):
     course_id = int(callback.data.split("_")[-1])
-    await edit_course(callback, state)
+    await edit_course_menu(callback.message, course_id)
+    await callback.answer()
 @dp.callback_query(F.data.regexp(r"^choose_lesson_edit_\d+$"))
-
 async def back_to_choose_lesson_edit(callback: CallbackQuery, state: FSMContext):
     course_id = int(callback.data.split("_")[-1])
     await choose_lesson_edit(callback, state)
+    await callback.answer()
+@dp.callback_query(F.data.regexp(r"^edit_course_info_\d+$"))
+async def back_to_edit_course_info(callback: CallbackQuery, state: FSMContext):
+    course_id = int(callback.data.split("_")[-1])
+    await edit_course_menu(callback.message, course_id)
+    await callback.answer()
+@dp.callback_query(F.data.regexp(r"^delete_lesson_choose_course_\d+$"))
+async def back_to_delete_lesson_choose_course(callback: CallbackQuery, state: FSMContext):
+    course_id = int(callback.data.split("_")[-1])
+    lessons = get_lessons_by_course(course_id)
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=lesson["title"], callback_data=f"delete_lesson_choose_{lesson['id']}_{course_id}")]
+            for lesson in lessons
+        ]
+    )
+    await callback.message.edit_text("Выберите урок для удаления:", reply_markup=kb)
+    await callback.answer()
+@dp.callback_query(F.data == "main_menu")
+async def main_menu_callback(callback: CallbackQuery):
+    await menu_command(callback.message)
+    await callback.answer()
+@dp.message(F.text == "⬅️ Назад")
+async def fsm_back_handler(message: Message, state: FSMContext):
+    data = await state.get_data()
+    await state.clear()
+    course_id = data.get("edit_course_id")
+    if course_id:
+        await edit_course_menu(message, course_id)
+    else:
+        await message.answer("Главное меню. Используйте команды или кнопки для работы с ботом.")
+
+
 
 async def edit_course_menu(message: Message, course_id: int):
     kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -743,7 +909,8 @@ async def edit_lesson_menu(message: Message, lesson_id: int, course_id: int):
         [InlineKeyboardButton(text="Название", callback_data=f"edit_lesson_title_{lesson_id}")],
         [InlineKeyboardButton(text="Видео", callback_data=f"edit_lesson_video_{lesson_id}")],
         [InlineKeyboardButton(text="Домашнее задание", callback_data=f"edit_lesson_homework_{lesson_id}")],
-        [InlineKeyboardButton(text="Доп. материал", callback_data=f"edit_lesson_material_{lesson_id}")],
+        [InlineKeyboardButton(text="Файл доп. материала", callback_data=f"edit_lesson_extra_file_{lesson_id}")],
+        [InlineKeyboardButton(text="Ссылка на доп. материал", callback_data=f"edit_lesson_extra_link_{lesson_id}")],
         [InlineKeyboardButton(text="⬅️ Назад", callback_data=f"choose_lesson_edit_{course_id}")]
     ])
     try:
@@ -773,7 +940,7 @@ async def show_courses(message: Message):
     await message.answer("Список курсов:", reply_markup=kb)
 @dp.callback_query(F.data.regexp(r"^view_lesson_simple_\d+$"))
 async def view_lesson_simple(callback: CallbackQuery):
-    user_id = callback.from_user.id  # исправлено!
+    user_id = callback.from_user.id
     if user_id != OWNER_ID and user_id not in ADMIN_IDS:
         await callback.answer("Нет доступа.", show_alert=True)
         return
@@ -791,12 +958,15 @@ async def view_lesson_simple(callback: CallbackQuery):
         except Exception:
             text += f"\nВидео не найдено: {video_id}"
     text += f"\n\nДомашнее задание: {lesson.get('homework', '-')}"
-    extra = lesson.get("extra_materials") or lesson.get("extra_material")
-    if extra:
+    extra_file = lesson.get("extra_material_file")
+    extra_link = lesson.get("extra_material_link")
+    if extra_file:
         try:
-            await callback.message.answer_document(extra)
+            await callback.message.answer_document(extra_file)
         except Exception:
-            text += f"\nДоп. материал не найден: {extra}"
+            text += f"\nДоп. материал не найден: {extra_file}"
+    if extra_link:
+        text += f"\nСсылка на доп. материал: {extra_link}"
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_courses")]

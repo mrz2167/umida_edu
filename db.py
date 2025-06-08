@@ -25,21 +25,24 @@ def add_user_role(user_id: int, fio: str, username: str, role: str):
         )
         conn.execute(ins)
 
-def add_course(title, description, lesson_count, created_by, approved):
+def add_course(title, description, lesson_count, created_by, approved, number_course=None):
     with engine.begin() as conn:
+        values = {
+            "title": title,
+            "description": description,
+            "lesson_count": lesson_count,
+            "created_by": created_by,
+            "approved": approved
+        }
+        if number_course is not None:
+            values["number_course"] = number_course
         result = conn.execute(
-            courses.insert().values(
-                title=title,
-                description=description,
-                lesson_count=lesson_count,
-                created_by=created_by,
-                approved=approved
-            ).returning(courses.c.id)
+            courses.insert().values(**values).returning(courses.c.id)
         )
         course_id = result.scalar()
         return course_id
 
-def add_lesson(course_id, title, video_path, homework, extra_materials):
+def add_lesson(course_id, title, video_path, homework, extra_material_file, extra_material_link):
     with engine.begin() as conn:
         conn.execute(
             lessons.insert().values(
@@ -47,12 +50,9 @@ def add_lesson(course_id, title, video_path, homework, extra_materials):
                 title=title,
                 video_file_id=video_path,
                 homework=homework,
-                extra_materials=extra_materials
+                extra_material_file=extra_material_file,
+                extra_material_link=extra_material_link
             )
-        )
-        conn.execute(
-            courses.update().where(courses.c.id == course_id)
-            .values(lesson_count=courses.c.lesson_count + 1)
         )
 
 def approve_course_by_id(course_id: int):
@@ -122,11 +122,18 @@ def update_lesson_homework(lesson_id: int, new_homework: str):
             .values(homework=new_homework)
         )
 
-def update_lesson_material(lesson_id: int, new_material_file_id):
+def update_lesson_extra_material_file(lesson_id, file_id):
     with engine.begin() as conn:
         conn.execute(
             lessons.update().where(lessons.c.id == lesson_id)
-            .values(extra_materials=new_material_file_id)
+            .values(extra_material_file=file_id)
+        )
+
+def update_lesson_extra_material_link(lesson_id, link):
+    with engine.begin() as conn:
+        conn.execute(
+            lessons.update().where(lessons.c.id == lesson_id)
+            .values(extra_material_link=link)
         )
 
 def get_course_by_id(course_id):
@@ -139,6 +146,20 @@ def get_course_by_id(course_id):
             return {"id": result[0], "title": result[1], "description": result[2]}
         return None
 
+def get_all_courses():
+    with engine.connect() as conn:
+        result = conn.execute(
+            select(courses.c.id, courses.c.title, courses.c.lesson_count).order_by(courses.c.id)
+        )
+        return [
+            {
+                "id": row[0],
+                "title": row[1],
+                "lesson_count": row[2]
+            }
+            for row in result.fetchall()
+        ]
+
 def get_lessons_by_course(course_id: int):
     with engine.connect() as conn:
         result = conn.execute(
@@ -147,7 +168,8 @@ def get_lessons_by_course(course_id: int):
                 lessons.c.title,
                 lessons.c.video_file_id,
                 lessons.c.homework,
-                lessons.c.extra_materials
+                lessons.c.extra_material_file,
+                lessons.c.extra_material_link
             ).where(lessons.c.course_id == course_id)
             .order_by(lessons.c.id)
         )
@@ -158,13 +180,16 @@ def get_lessons_by_course(course_id: int):
                 "title": row[1],
                 "video_file_id": row[2],
                 "homework": row[3],
-                "extra_materials": row[4],
+                "extra_material_file": row[4],
+                "extra_material_link": row[5],
             })
         return lessons_list
 
-def get_all_courses():
+def update_course_lesson_count(course_id, count):
     with engine.connect() as conn:
-        result = conn.execute(
-            select(courses.c.id, courses.c.title).order_by(courses.c.id)
+        conn.execute(
+            courses.update()
+            .where(courses.c.id == course_id)
+            .values(lesson_count=count)
         )
-        return [{"id": row[0], "title": row[1]} for row in result.fetchall()]
+        conn.commit()   

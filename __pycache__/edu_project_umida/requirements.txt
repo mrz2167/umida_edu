@@ -1,4 +1,0 @@
-aiogram==2.21.0
-asyncio==3.4.3
-sqlalchemy==1.4.22
-python-dotenv==0.19.1
