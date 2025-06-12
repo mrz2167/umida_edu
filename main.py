@@ -12,7 +12,7 @@ from db import (
     check_user_role, add_user_role, add_course, add_lesson, update_homework_status,
     update_course_title, update_course_description, get_all_courses, get_next_lesson,
     update_lesson_title, update_lesson_video, delete_course_and_lessons, notify_admin_about_homework,
-    update_lesson_homework, update_lesson_extra_material_file, get_user_by_id,
+    update_lesson_homework, update_lesson_extra_material_file, get_user_by_id, get_next_course_for_user,
     update_lesson_extra_material_link, delete_lesson_by_id, UserLesson, Lesson,
     get_lessons_by_course, get_course_by_id, approve_course_by_id, save_homework, 
     update_course_lesson_count, initialize_user_lessons, get_available_courses_for_user,

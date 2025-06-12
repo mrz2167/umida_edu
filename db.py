@@ -4,8 +4,6 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from datetime import datetime
 import os
 
-
-
 DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 metadata = MetaData()
@@ -486,4 +484,30 @@ def get_next_lesson(user_id: int, current_lesson_id: int):
 
         if next_lesson:
             return {"id": next_lesson[0], "title": next_lesson[1]}
+        return None
+
+def get_next_course_for_user(user_id: int, current_course_id: int):
+    with SessionLocal() as session:
+        # Получим список всех курсов, отсортированных по ID
+        all_courses = session.execute(
+            select(courses).order_by(courses.c.id)
+        ).scalars().all()
+
+        # Найдём индекс текущего курса
+        current_index = next((i for i, c in enumerate(all_courses) if c.id == current_course_id), None)
+        if current_index is None or current_index + 1 >= len(all_courses):
+            return None
+
+        next_course = all_courses[current_index + 1]
+
+        # Проверим, есть ли уроки в следующем курсе
+        has_lessons = session.execute(
+            select(lessons).where(lessons.c.course_id == next_course.id)
+        ).first()
+        if has_lessons:
+            return {
+                "id": next_course.id,
+                "title": next_course.title
+            }
+
         return None
