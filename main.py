@@ -163,6 +163,8 @@ class UserRegistration:
         self.lesson_flow = LessonFlow(bot)
     
     async def approve_user(self, callback: CallbackQuery):
+        await callback.answer()
+
         """Подтверждение регистрации пользователя"""
         user_id = int(callback.data.split("_")[2])
         req = pending_requests.pop(user_id, None)
@@ -176,7 +178,6 @@ class UserRegistration:
             user_id, 
             f"🎉 Tabriklaymiz! Siz talabalar ro'yxatidasiz, {fio}."
         )
-        await send_welcome_message(self.bot, user_id)
         
         # Уведомление админа
         if callback.from_user.id == OWNER_ID:
@@ -187,6 +188,8 @@ class UserRegistration:
                 f"👤 Админ {callback.from_user.full_name} предоставил доступ {fio}"
             )
             await callback.message.answer(f"✅ Пользователь {fio} добавлен как участник.")
+
+        # await send_welcome_message(self.bot, user_id)
 
         # Инициализация первого урока
         course = get_first_course()
@@ -400,21 +403,25 @@ async def approve_hw_handler(callback: CallbackQuery):
 
     # Проверим, какой следующий урок открылся
     next_lesson = get_next_lesson(user_id, lesson_id)
-    if next_lesson:
-        # Отправим кнопку пользователю
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+    if next_course:
+    lessons = get_lessons_by_course(next_course["id"])
+    if lessons:
+        first_lesson = lessons[0]
+        create_or_update_user_lesson(user_id, first_lesson["id"], "in_progress")
+
+        kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(
-                text="🚀 Янги дарсни бошлаш",
-                callback_data=f"start_lesson_{next_lesson['id']}"
+                text="🚀 Янги курсни бошлаш",
+                callback_data=f"start_lesson_{first_lesson['id']}"
             )]
         ])
         await callback.bot.send_message(
             user_id,
-            "🟢 Сизнинг кейинги дарсингиз тайёр. Бошлаш учун тугмани босинг:",
-            reply_markup=keyboard
+            f"🎓 Табриклаймиз! Сиз янги курсга ўтдингиз: {next_course['title']}",
+            reply_markup=kb
         )
 
-    await callback.answer("Дарс одобрен. Следующий дарс открыт.")
+    await callback.answer("Урок одобрен. Следующий урок открыт.")
 
 @dp.callback_query(F.data.startswith("redo_hw_"))
 async def redo_hw_prompt(callback: CallbackQuery, state: FSMContext):
