@@ -404,7 +404,7 @@ async def approve_hw_handler(callback: CallbackQuery):
     # Проверим, какой следующий урок открылся
     next_lesson = get_next_lesson(user_id, lesson_id)
     if next_course:
-    lessons = get_lessons_by_course(next_course["id"])
+        lessons = get_lessons_by_course(next_course["id"])
     if lessons:
         first_lesson = lessons[0]
         create_or_update_user_lesson(user_id, first_lesson["id"], "in_progress")
