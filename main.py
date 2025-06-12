@@ -13,7 +13,7 @@ from db import (
     update_course_title, update_course_description, get_all_courses, get_next_lesson,
     update_lesson_title, update_lesson_video, delete_course_and_lessons, notify_admin_about_homework,
     update_lesson_homework, update_lesson_extra_material_file, get_user_by_id, get_next_course_for_user,
-    update_lesson_extra_material_link, delete_lesson_by_id, UserLesson, Lesson,
+    update_lesson_extra_material_link, delete_lesson_by_id, UserLesson, Lesson, get_course_by_lesson,
     get_lessons_by_course, get_course_by_id, approve_course_by_id, save_homework, 
     update_course_lesson_count, initialize_user_lessons, get_available_courses_for_user,
     get_first_lesson, create_or_update_user_lesson, submit_homework, approve_homework, 
@@ -27,13 +27,11 @@ import logging
 from aiogram import Router
 from aiogram.enums import ParseMode
 
-
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 pending_requests = {}
 
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
-
 
 
 @dp.message(F.text == "/start")
@@ -42,14 +40,16 @@ async def cmd_start(message: Message):
     if role == "owner":
         await message.answer( f"Вы уже авторизованы. Ваша роль: {role}",
         )
-    elif role in ["user", "admin"]:
+    elif role == "admin":
         await message.answer(f"Вы уже авторизованы. Ваша роль: {role}")
+    elif role == "user":
+        await message.answer(f"Сиз аллақачон рўйхатдан ўтгансиз. Сиз катнашувчисиз")
     else:
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="Ruxsat so'rash", callback_data="request_access")]
         ])
         await message.answer(
-            f"Salom, {message.from_user.full_name}! Iltimos, ma'muriyatdan ruxsat so'rang.",
+            f"Салом, {message.from_user.full_name}! Илтимос, маъмуриятдан рухсат сўранг.",
             reply_markup=kb
         )
 
@@ -86,7 +86,7 @@ async def menu_command(message: Message):
             )
         else:
             text = (
-                "У вас нет доступа. Пожалуйста, запросите доступ у администрации."
+                "Сизда рухсат йўқ. Илтимос, рухсатни маъмуриятдан сўранг."
             )
     await message.answer(text)
 
@@ -126,7 +126,7 @@ class AccessRequest(StatesGroup):
 @dp.callback_query(F.data == "request_access")
 async def handle_request_access(callback: CallbackQuery, state: FSMContext):
     await callback.message.delete()
-    await callback.message.answer("Iltimos, ruxsat soʻrash uchun toʻliq ismingizni kiriting:")
+    await callback.message.answer("Илтимос, рухсат сўраш учун тўлиқ исмингизни киритинг:")
     await state.set_state(AccessRequest.waiting_for_name)
     await callback.answer()
 @dp.message(AccessRequest.waiting_for_name)
@@ -154,10 +154,11 @@ async def process_name(message: Message, state: FSMContext):
             f"🔔 Запрос на доступ от {fio} (@{username})\nID: <code>{user_id}</code>",
             reply_markup=kb
         )
-    await message.answer("✅ Ваш запрос отправлен администрации, дождитесь подтверждения.")
+    await message.answer("✅ Сизнинг сўровингиз маъмуриятга юборилди, тасдиқни кутинг.")
     await state.clear()
 
 class UserRegistration:
+    
     def __init__(self, bot):
         self.bot = bot
         self.lesson_flow = LessonFlow(bot)
@@ -176,7 +177,7 @@ class UserRegistration:
         # Отправка уведомлений
         await self.bot.send_message(
             user_id, 
-            f"🎉 Tabriklaymiz! Siz talabalar ro'yxatidasiz, {fio}."
+            f"🎉 Табриклаймиз! Сиз талабалар рўйхатидасиз, {fio}."
         )
         
         # Уведомление админа
@@ -189,7 +190,7 @@ class UserRegistration:
             )
             await callback.message.answer(f"✅ Пользователь {fio} добавлен как участник.")
 
-        # await send_welcome_message(self.bot, user_id)
+        await send_welcome_message(self.bot, user_id)
 
         # Инициализация первого урока
         course = get_first_course()
@@ -213,7 +214,6 @@ class UserRegistration:
 
         
         await callback.answer()
-
 class LessonFlow:
     def __init__(self, bot):
         self.bot = bot
@@ -304,29 +304,24 @@ class LessonFlow:
 
         await notify_admin_about_homework(self.bot, user_id, user_lesson["lesson_id"], text, file_id)
         await message.answer("✅ Уй вазифангиз қабул қилинди, жавобингиз админга юборилди.")
-
 registration = UserRegistration(bot)
 lesson_flow = LessonFlow(bot)
 
 @dp.callback_query(F.data.startswith("make_user_"))
 async def make_user_handler(callback: CallbackQuery):
     await registration.approve_user(callback)
-
 @dp.callback_query(F.data.startswith("start_lesson_"))
 async def start_lesson_handler(callback: CallbackQuery):
     lesson_id = int(callback.data.split("_")[-1])
     await lesson_flow.start_lesson(callback.from_user.id, lesson_id)
     await callback.answer()
-
 @dp.callback_query(F.data.startswith("video_watched_"))
 async def video_watched_handler(callback: CallbackQuery):
     await lesson_flow.handle_video_watched(callback)
     await callback.answer()
-
 @dp.message(StateFilter(None), F.text | F.document)
 async def homework_handler(message: Message):
     await lesson_flow.handle_homework_submission(message)
-
 async def notify_admin_about_homework(bot, user_or_id, lesson_id, text=None, file_id=None):
     if isinstance(user_or_id, int):
         user = await bot.get_chat(user_or_id)
@@ -379,11 +374,10 @@ async def notify_admin_about_homework(bot, user_or_id, lesson_id, text=None, fil
                     reply_markup=keyboard
                 )
         except Exception as e:
-            print(f"❗ Админу {admin_id} юбориб бўлмади: {e}")
+            print(f"❗ Админга {admin_id} юбориб бўлмади: {e}")
 
 class HomeworkStates(StatesGroup):
     awaiting_redo_comment = State()
-
 @dp.callback_query(F.data.startswith("approve_hw_"))
 async def approve_hw_handler(callback: CallbackQuery):
     parts = callback.data.split("_")
@@ -401,28 +395,48 @@ async def approve_hw_handler(callback: CallbackQuery):
     except Exception:
         await callback.message.answer("✅ Одобрено.")
 
-    # Проверим, какой следующий урок открылся
     next_lesson = get_next_lesson(user_id, lesson_id)
-    if next_course:
-        lessons = get_lessons_by_course(next_course["id"])
-    if lessons:
-        first_lesson = lessons[0]
-        create_or_update_user_lesson(user_id, first_lesson["id"], "in_progress")
+
+    if next_lesson:
+        # Если это просто следующий урок текущего курса — продолжаем как обычно
+        create_or_update_user_lesson(user_id, next_lesson["id"], "in_progress")
 
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(
-                text="🚀 Янги курсни бошлаш",
-                callback_data=f"start_lesson_{first_lesson['id']}"
+                text="➡️ Кейинги дарс",
+                callback_data=f"start_lesson_{next_lesson['id']}"
             )]
         ])
         await callback.bot.send_message(
             user_id,
-            f"🎓 Табриклаймиз! Сиз янги курсга ўтдингиз: {next_course['title']}",
+            f"📚 Кейинги дарс тайёр: {next_lesson['title']}",
             reply_markup=kb
         )
 
-    await callback.answer("Урок одобрен. Следующий урок открыт.")
+    else:
+        # Уроков больше нет — проверим, есть ли следующий курс
+        current_course = get_course_by_lesson(lesson_id)
+        next_course = get_next_course(current_course["id"])
 
+        if next_course:
+            lessons = get_lessons_by_course(next_course["id"])
+            if lessons:
+                first_lesson = lessons[0]
+                create_or_update_user_lesson(user_id, first_lesson["id"], "in_progress")
+
+                kb = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(
+                        text="🚀 Янги курсни бошлаш",
+                        callback_data=f"start_lesson_{first_lesson['id']}"
+                    )]
+                ])
+                await callback.bot.send_message(
+                    user_id,
+                    f"🎓 Табриклаймиз! Сиз янги курсга ўтдингиз: {next_course['title']}",
+                    reply_markup=kb
+                )
+                
+    await callback.answer("Урок одобрен. Следующий урок открыт.")
 @dp.callback_query(F.data.startswith("redo_hw_"))
 async def redo_hw_prompt(callback: CallbackQuery, state: FSMContext):
     parts = callback.data.split("_")
@@ -432,7 +446,6 @@ async def redo_hw_prompt(callback: CallbackQuery, state: FSMContext):
     await state.set_state(HomeworkStates.awaiting_redo_comment)
     print(f"1. [FSM] Current state: {await state.get_data()}")
     await callback.answer()
-
 @dp.message(StateFilter(HomeworkStates.awaiting_redo_comment))
 async def redo_hw_comment_handler(message: Message, state: FSMContext):
 
@@ -451,8 +464,6 @@ async def redo_hw_comment_handler(message: Message, state: FSMContext):
 
     await message.answer("📨 Фойдаланувчига хабар юборилди.")
     await state.clear()
-
-
 
 
 @dp.callback_query(F.data.startswith("make_admin_"))
@@ -479,6 +490,7 @@ async def decline_request(callback: CallbackQuery):
     await bot.send_message(user_id, "❌ Ваш запрос на доступ отклонён, обратитесь к администации.")
     await callback.message.answer(f"❌ Запрос от пользователя {fio} отклонён.")
     await callback.answer()
+
 
 class CourseCreation(StatesGroup):
     waiting_for_title = State()
@@ -1192,8 +1204,6 @@ async def fsm_back_handler(message: Message, state: FSMContext):
     else:
         await message.answer("Главное меню. Используйте команды или кнопки для работы с ботом.")
 
-
-
 async def edit_course_menu(message: Message, course_id: int):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Название/описание", callback_data=f"edit_course_info_{course_id}")],
@@ -1297,18 +1307,6 @@ async def view_course(callback: CallbackQuery):
         ] + [[InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_courses")]]
     )
     await callback.message.edit_text(text, reply_markup=kb)
-
-
-@dp.message(F.web_app_data)
-async def handle_webapp_data(message: Message):
-    data = json.loads(message.web_app_data.data)
-    if data.get("action") == "send_file":
-        lesson_id = data.get("lesson_id")
-        async with Session() as session:
-            result = await session.execute(select(Lesson).where(Lesson.id == lesson_id))
-            lesson = result.scalar()
-            if lesson and lesson.workbook:
-                await message.answer_document(lesson.workbook, caption="📘 Вот ваш файл для начала урока")
 
 
 @dp.callback_query()

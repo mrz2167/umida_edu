@@ -196,6 +196,19 @@ def get_lessons_by_course(course_id: int):
             })
         return lessons_list
 
+def get_course_by_lesson(lesson_id: int):
+    with SessionLocal() as session:
+        result = session.execute(
+            select(lessons.c.course_id).where(lessons.c.id == lesson_id)
+        ).scalar()
+        if result:
+            return session.execute(
+                select(courses).where(courses.c.id == result)
+            ).mappings().first()
+        return None
+
+
+
 def get_lesson_by_id(lesson_id: int):
     with engine.connect() as conn:
         result = conn.execute(
