@@ -1,5 +1,5 @@
 import re
-from config import BOT_TOKEN, OWNER_ID, ADMIN_IDS
+from config import BOT_TOKEN, OWNER_ID, ADMIN_IDS, ADMIN_ESTER, ADMINISTRATION
 from aiogram.filters import Command, or_f, StateFilter
 from aiogram.enums import ChatAction
 from aiogram.fsm.context import FSMContext
@@ -31,7 +31,7 @@ bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTM
 pending_requests = {}
 
 storage = MemoryStorage()
-dp = Dispatcher(storage=storage)
+dp = Dispatcher(bot=bot, storage=storage)
 
 
 @dp.message(F.text == "/start")
@@ -55,8 +55,13 @@ async def cmd_start(message: Message):
 
 @dp.message(Command("menu"))
 async def menu_command(message: Message):
+    print("TRIGGERED /menu")
+    print("Text:", repr(message.text))
+    print("From ID:", message.from_user.id)
+    print("Role:", check_user_role(message.from_user.id))
+
     user_id = message.from_user.id
-    if user_id == OWNER_ID:
+    if user_id in ADMINISTRATION.values():
         text = (
             "<b>Меню владельца:</b>\n"
             "/add_course — добавить курс\n"
@@ -66,12 +71,6 @@ async def menu_command(message: Message):
             "/delete_lesson — удалить урок\n"
             "/courses — просмотр курсов\n"
             "/sync_lessons — синхронизировать количество уроков\n"
-            "/menu — показать это меню\n"
-        )
-    elif user_id in ADMIN_IDS:
-        text = (
-            "<b>Меню администратора:</b>\n"
-            "/courses — просмотр курсов\n"
             "/menu — показать это меню\n"
         )
     else:
@@ -98,21 +97,6 @@ async def sync_lessons_auto():
         actual_count = len(get_lessons_by_course(course["id"]))
         if course["lesson_count"] != actual_count:
             update_course_lesson_count(course["id"], actual_count)
-@dp.message(Command("sync_lessons"))
-async def sync_lessons_count(message: Message):
-    if message.from_user.id != OWNER_ID:
-        await message.answer("Нет доступа.")
-        return
-
-    courses = get_all_courses()
-    fixed = 0
-    for course in courses:
-        actual_count = len(get_lessons_by_course(course["id"]))
-        if course["lesson_count"] != actual_count:
-            update_course_lesson_count(course["id"], actual_count)
-            fixed += 1
-
-    await message.answer(f"Синхронизация завершена.\nОбновлено курсов: {fixed}")
 
 async def send_welcome_message(bot: Bot, user_id: int):
     for part in welcome_parts:
@@ -211,15 +195,16 @@ class UserRegistration:
                 reply_markup=kb
             )
 
+class HomeworkType(StatesGroup):
+    choosing_type = State()
+    waiting_for_text = State()
+    waiting_for_file = State()
 
-        
-        await callback.answer()
 class LessonFlow:
     def __init__(self, bot):
         self.bot = bot
-    
+
     async def start_lesson(self, user_id: int, lesson_id: int):
-        """Основной метод для начала урока"""
         lesson = get_lesson_by_id(lesson_id)
         if not lesson:
             await self.bot.send_message(user_id, "Дарс топилмади.")
@@ -238,7 +223,7 @@ class LessonFlow:
             except TelegramBadRequest as e:
                 await self.bot.send_message(user_id, "❗ Видео юбориб бўлмади. Илтимос, админга хабар беринг.")
                 await self.bot.send_message(
-                    OWNER_ID,
+                    ADMINISTRATION.values(),
                     f"❌ Видео юборишда хато:\n"
                     f"👤 Фойдаланувчи: [{user_id}](tg://user?id={user_id})\n"
                     f"📚 Дарс ID: {lesson['id']}\n"
@@ -247,7 +232,6 @@ class LessonFlow:
                     parse_mode="Markdown"
                 )
 
-        
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(
                     text="📺 Кўрилди",
@@ -260,68 +244,107 @@ class LessonFlow:
                 reply_markup=keyboard
             )
             update_user_lesson_status(user_id, lesson_id, "video_not_watched")
-        
         else:
             await self.bot.send_message(user_id, "Видео мавжуд эмас.")
-           
-    async def handle_video_watched(self, callback: CallbackQuery):
-        """Обработка подтверждения просмотра видео"""
+
+    async def handle_video_watched(self, callback: CallbackQuery, state: FSMContext):
         user_id = callback.from_user.id
         lesson_id = int(callback.data.split("_")[-1])
         lesson = get_lesson_by_id(lesson_id)
-        
+
         update_user_lesson_status(user_id, lesson_id, "video_watched")
-        
+
         if lesson.get("homework"):
             await self.bot.send_message(
                 user_id, 
-                f"📚 Уй вазифаси: {lesson['homework']}\n"
-                "🎯 Илтимос, уй вазифасини матн ёки файл кўринишида юборинг."
+                f"📚 Уй вазифаси: {lesson['homework']}"
             )
 
-    async def handle_homework_submission(self, message: Message):
-        """Обработка отправки домашнего задания"""
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [
+                    InlineKeyboardButton(text="📝 Текст", callback_data=f"homework_text_{lesson_id}"),
+                    InlineKeyboardButton(text="📄 Файл", callback_data=f"homework_file_{lesson_id}")
+                ]
+            ])
+            await self.bot.send_message(
+                user_id,
+                "Қандай шаклда уй вазифасини юбормоқчисиз?",
+                reply_markup=kb
+            )
+
+    async def choose_homework_text(self, callback: CallbackQuery, state: FSMContext):
+        lesson_id = int(callback.data.split("_")[-1])
+        await state.update_data(lesson_id=lesson_id)
+        await callback.message.answer("📝 Илтимос, матн кўринишида уй вазифасини ёзинг:")
+        await state.set_state(HomeworkType.waiting_for_text)
+        await callback.answer()
+
+    async def choose_homework_file(self, callback: CallbackQuery, state: FSMContext):
+        lesson_id = int(callback.data.split("_")[-1])
+        await state.update_data(lesson_id=lesson_id)
+        await callback.message.answer("📄 Илтимос, файлни юборинг:")
+        await state.set_state(HomeworkType.waiting_for_file)
+        await callback.answer()
+
+    async def receive_homework_text(self, message: Message, state: FSMContext):
+        data = await state.get_data()
         user_id = message.from_user.id
-        user_lesson = get_user_lesson_in_progress(user_id)
-        
-        if not user_lesson or user_lesson["status"] not in ("video_watched", "redo"):
-            return
+        lesson_id = data["lesson_id"]
 
-        # Сохранение ДЗ
-        text = message.text if message.text else None
-        file_id = message.document.file_id if message.document else None
-        save_homework(user_id, user_lesson["lesson_id"], text, file_id)
-        update_user_lesson_status(user_id, user_lesson["lesson_id"], "submitted")
-        lesson = get_lesson_by_id(user_lesson["lesson_id"])
+        save_homework(user_id, lesson_id, message.text, None)
+        update_user_lesson_status(user_id, lesson_id, "submitted")
 
-        if lesson.get("extra_material_file"):
-            await message.answer_document(
-                document=lesson["extra_material_file"], 
-                caption="📎 Қўшимча малумотлар:"
-            )
-        if lesson.get("extra_material_link"):
-            await message.answer(f"🔗 Қўшимча ҳавола: {lesson['extra_material_link']}")
+        await message.answer("✅ Матн қабул қилинди.")
+        await notify_admin_about_homework(self.bot, user_id, lesson_id, text=message.text)
+        await state.clear()
 
-        await notify_admin_about_homework(self.bot, user_id, user_lesson["lesson_id"], text, file_id)
-        await message.answer("✅ Уй вазифангиз қабул қилинди, жавобингиз админга юборилди.")
+    async def receive_homework_file(self, message: Message, state: FSMContext):
+        data = await state.get_data()
+        user_id = message.from_user.id
+        lesson_id = data["lesson_id"]
+
+        file_id = message.document.file_id
+        save_homework(user_id, lesson_id, None, file_id)
+        update_user_lesson_status(user_id, lesson_id, "submitted")
+
+        await message.answer("✅ Файл қабул қилинди.")
+        await notify_admin_about_homework(self.bot, user_id, lesson_id, file_id=file_id)
+        await state.clear()
+
 registration = UserRegistration(bot)
 lesson_flow = LessonFlow(bot)
+
+@dp.callback_query(F.data.startswith("start_lesson_"))
+async def cb_start_lesson(callback: CallbackQuery):
+    lesson_id = int(callback.data.split("_")[-1])
+    await lesson_flow.start_lesson(callback.from_user.id, lesson_id)
+    await callback.answer()
+
+@dp.callback_query(F.data.startswith("video_watched_"))
+async def cb_video_watched(callback: CallbackQuery, state: FSMContext):
+    await lesson_flow.handle_video_watched(callback, state)
+    await callback.answer()
+
+@dp.callback_query(F.data.startswith("homework_text_"))
+async def cb_homework_text(callback: CallbackQuery, state: FSMContext):
+    await lesson_flow.choose_homework_text(callback, state)
+
+@dp.callback_query(F.data.startswith("homework_file_"))
+async def cb_homework_file(callback: CallbackQuery, state: FSMContext):
+    await lesson_flow.choose_homework_file(callback, state)
+
+@dp.message(HomeworkType.waiting_for_text)
+async def msg_homework_text(message: Message, state: FSMContext):
+    await lesson_flow.receive_homework_text(message, state)
+
+@dp.message(HomeworkType.waiting_for_file, F.document)
+async def msg_homework_file(message: Message, state: FSMContext):
+    await lesson_flow.receive_homework_file(message, state)
 
 @dp.callback_query(F.data.startswith("make_user_"))
 async def make_user_handler(callback: CallbackQuery):
     await registration.approve_user(callback)
-@dp.callback_query(F.data.startswith("start_lesson_"))
-async def start_lesson_handler(callback: CallbackQuery):
-    lesson_id = int(callback.data.split("_")[-1])
-    await lesson_flow.start_lesson(callback.from_user.id, lesson_id)
-    await callback.answer()
-@dp.callback_query(F.data.startswith("video_watched_"))
-async def video_watched_handler(callback: CallbackQuery):
-    await lesson_flow.handle_video_watched(callback)
-    await callback.answer()
-@dp.message(StateFilter(None), F.text | F.document)
-async def homework_handler(message: Message):
-    await lesson_flow.handle_homework_submission(message)
+
 async def notify_admin_about_homework(bot, user_or_id, lesson_id, text=None, file_id=None):
     if isinstance(user_or_id, int):
         user = await bot.get_chat(user_or_id)
@@ -466,6 +489,23 @@ async def redo_hw_comment_handler(message: Message, state: FSMContext):
     await state.clear()
 
 
+@dp.message(Command("sync_lessons"))
+async def sync_lessons_count(message: Message):
+    user_id = message.from_user.id
+    if user_id not in ADMINISTRATION.values():
+        await message.answer("Нет доступа.")
+        return
+
+    courses = get_all_courses()
+    fixed = 0
+    for course in courses:
+        actual_count = len(get_lessons_by_course(course["id"]))
+        if course["lesson_count"] != actual_count:
+            update_course_lesson_count(course["id"], actual_count)
+            fixed += 1
+
+    await message.answer(f"Синхронизация завершена.\nОбновлено курсов: {fixed}")
+
 @dp.callback_query(F.data.startswith("make_admin_"))
 async def make_admin(callback: CallbackQuery):
     user_id = int(callback.data.split("_")[2])
@@ -476,7 +516,7 @@ async def make_admin(callback: CallbackQuery):
     add_user_role(user_id, fio, username, "admin")
     await bot.send_message(user_id, f"🎉 Добро пожаловать в команду, админ {fio}!")
 
-    if callback.from_user.id == OWNER_ID:
+    if callback.from_user.id in ADMINISTRATION.values():
         await callback.message.answer(f"✅ Вы предоставили доступ пользователю {fio}.")
     else:
         await bot.send_message(OWNER_ID, f"👤 Админ {callback.from_user.full_name} предоставил доступ пользователю {fio}.")
@@ -491,7 +531,7 @@ async def decline_request(callback: CallbackQuery):
     await callback.message.answer(f"❌ Запрос от пользователя {fio} отклонён.")
     await callback.answer()
 
-
+    
 class CourseCreation(StatesGroup):
     waiting_for_title = State()
     waiting_for_description = State()
@@ -504,7 +544,9 @@ class CourseCreation(StatesGroup):
     waiting_for_extra_material_file = State()
 @dp.message(Command("add_course"))
 async def start_course_creation(message: Message, state: FSMContext):
-    if message.from_user.id != OWNER_ID:
+    logging.info(f"Received /add_course from {message.from_user.id}")
+    user_id = message.from_user.id
+    if user_id not in ADMINISTRATION.values():
         await message.answer("Нет доступа.")
         return
     await state.clear()
@@ -739,7 +781,7 @@ async def decline_course(callback: CallbackQuery):
 
 @dp.callback_query(F.data.regexp(r"^edit_course_\d+$"))
 async def edit_course(callback: CallbackQuery, state: FSMContext):
-    if callback.from_user.id != OWNER_ID:  # исправлено!
+    if callback.from_user.id not in ADMINISTRATION.values():  # исправлено!
         await callback.message.answer("Нет доступа.")
         return
     course_id = int(callback.data.split("_")[-1])
@@ -783,7 +825,7 @@ class EditCourse(StatesGroup):
     waiting_for_description = State()
 @dp.callback_query(F.data.regexp(r"^edit_course_title_\d+$"))
 async def edit_course_title(callback: CallbackQuery, state: FSMContext):
-    if callback.from_user.id != OWNER_ID:
+    if callback.from_user.id not in ADMINISTRATION.values():
         await message.answer("Нет доступа.")
         return
     course_id = int(callback.data.split("_")[-1])
@@ -792,7 +834,7 @@ async def edit_course_title(callback: CallbackQuery, state: FSMContext):
     await state.set_state(EditCourse.waiting_for_title)
 @dp.callback_query(F.data.regexp(r"^edit_course_desc_\d+$"))
 async def edit_course_desc(callback: CallbackQuery, state: FSMContext):
-    if callback.from_user.id != OWNER_ID:
+    if callback.from_user.id not in ADMINISTRATION.values():
         await message.answer("Нет доступа.")
         return
     course_id = int(callback.data.split("_")[-1])
@@ -834,7 +876,7 @@ class AddLesson(StatesGroup):
     waiting_for_extra_material_file = State()
 @dp.callback_query(F.data.startswith("add_lesson_"))
 async def add_lesson_to_course(callback: CallbackQuery, state: FSMContext):
-    if callback.from_user.id == OWNER_ID:
+    if callback.from_user.id in ADMINISTRATION.values():
         course_id = int(callback.data.split("_")[-1])
         await state.update_data(add_lesson_course_id=course_id)
         await callback.message.edit_text("Введите название нового урока:")
@@ -898,7 +940,7 @@ class AddLessonGlobal(StatesGroup):
     waiting_for_course = State()
 @dp.message(Command("add_lesson"))
 async def add_lesson_command(message: Message, state: FSMContext):
-    if message.from_user.id != OWNER_ID:
+    if message.from_user.id not in ADMINISTRATION.values():
         await message.answer("Нет доступа.")
         return
     courses = get_all_courses()
@@ -945,7 +987,7 @@ class DeleteLessonGlobal(StatesGroup):
     waiting_for_lesson = State()
 @dp.message(Command("delete_lesson"))
 async def delete_lesson_command(message: Message, state: FSMContext):
-    if message.from_user.id != OWNER_ID:
+    if message.from_user.id not in ADMINISTRATION.values():
         await message.answer("Нет доступа.")
         return
     courses = get_all_courses()
@@ -990,7 +1032,7 @@ class DeleteCourseGlobal(StatesGroup):
     waiting_for_course = State()
 @dp.message(Command("delete_course"))
 async def delete_course_command(message: Message, state: FSMContext):
-    if message.from_user.id != OWNER_ID:
+    if message.from_user.id not in ADMINISTRATION.values():
         await message.answer("Нет доступа.")
         return
     courses = get_all_courses()
@@ -1020,7 +1062,7 @@ class EditLesson(StatesGroup):
     waiting_for_extra_material_link = State()
 @dp.callback_query(F.data.startswith("choose_lesson_edit_"))
 async def choose_lesson_edit(callback: CallbackQuery, state: FSMContext):
-    if callback.from_user.id != OWNER_ID:
+    if callback.from_user.id not in ADMINISTRATION.values():
         await callback.answer("Нет доступа.", show_alert=True)
         return
 
@@ -1072,7 +1114,7 @@ class EditCourseGlobal(StatesGroup):
     waiting_for_course = State()
 @dp.message(Command("edit_course"))
 async def edit_course_command(message: Message, state: FSMContext):
-    if message.from_user.id != OWNER_ID:
+    if message.from_user.id not in ADMINISTRATION.values():
         await message.answer("Нет доступа.")
         return
     courses = get_all_courses()
@@ -1089,7 +1131,7 @@ async def edit_course_command(message: Message, state: FSMContext):
     await state.set_state(EditCourseGlobal.waiting_for_course)
 @dp.callback_query(F.data.regexp(r"^edit_course_choose_\d+$"), EditCourseGlobal.waiting_for_course)
 async def edit_course_choose(callback: CallbackQuery, state: FSMContext):
-    if callback.from_user.id != OWNER_ID:
+    if callback.from_user.id not in ADMINISTRATION.values():
         await callback.answer("Нет доступа.", show_alert=True)
         return
     course_id = int(callback.data.split("_")[-1])
@@ -1309,14 +1351,9 @@ async def view_course(callback: CallbackQuery):
     await callback.message.edit_text(text, reply_markup=kb)
 
 
-@dp.callback_query()
-async def debug_callback(callback: CallbackQuery):
-    print("DEBUG callback.data:", callback.data)
-    await callback.answer()
-
 
 async def main():
-    logging.basicConfig(level=logging.INFO)
+    # logging.basicConfig(level=logging.INFO)
     await dp.start_polling(bot)
 
 if __name__ == "__main__":

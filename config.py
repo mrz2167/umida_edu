@@ -24,5 +24,25 @@ def get_admin_ids():
     conn.close()
     return admin_ids
 
+def get_admin_ester_id():
+    """Получает ID администратора Esther (специальный админ)"""
+    conn = psycopg2.connect(DATABASE_URL)
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM users WHERE role = 'Ester' LIMIT 1")
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    return row[0] if row else None
+
 OWNER_ID = get_owner_id()
-ADMIN_IDS = get_admin_ids()
+ADMIN_ESTER = get_admin_ester_id()  # Специальный админ Esther
+ADMIN_IDS = get_admin_ids()   
+ADMINISTRATION = {
+    "OWNER_ID": OWNER_ID,
+    "ADMIN_ESTER": ADMIN_ESTER
+}
+
+print(f"Owner ID: {OWNER_ID}")
+print(f"Admin Esther ID: {ADMIN_ESTER}")
+print(f"Admin IDs: {ADMIN_IDS}")
+print("ADMINISTRATION:", ADMINISTRATION)
