@@ -500,11 +500,14 @@ def get_next_lesson(user_id: int, current_lesson_id: int):
         return None
 
 def get_next_course_for_user(user_id: int, current_course_id: int):
+    print("Текущий курс:", current_course_id)
+
     with SessionLocal() as session:
         # Получим список всех курсов, отсортированных по ID
         all_courses = session.execute(
-            select(courses).order_by(courses.c.id)
-        ).scalars().all()
+            select(courses).order_by(courses.c.number_course)
+        ).all()
+
 
         # Найдём индекс текущего курса
         current_index = next((i for i, c in enumerate(all_courses) if c.id == current_course_id), None)
@@ -522,5 +525,8 @@ def get_next_course_for_user(user_id: int, current_course_id: int):
                 "id": next_course.id,
                 "title": next_course.title
             }
-
+        print("Курсы:", [(c.id, c.number_course) for c in all_courses])
+        print("Следующий курс:", next_course.id)
         return None
+
+

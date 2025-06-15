@@ -1,5 +1,5 @@
 import re
-from config import BOT_TOKEN, OWNER_ID, ADMIN_IDS, ADMIN_ESTER, ADMINISTRATION
+from config import BOT_TOKEN, OWNER_ID, ADMIN_IDS, ADMIN_ESTER, ADMINISTRATION, ALL_ADMINS
 from aiogram.filters import Command, or_f, StateFilter
 from aiogram.enums import ChatAction
 from aiogram.fsm.context import FSMContext
@@ -33,7 +33,7 @@ pending_requests = {}
 storage = MemoryStorage()
 dp = Dispatcher(bot=bot, storage=storage)
 
-
+print(f'Bot started ')
 @dp.message(F.text == "/start")
 async def cmd_start(message: Message):
     role = check_user_role(message.from_user.id)
@@ -61,7 +61,7 @@ async def menu_command(message: Message):
     print("Role:", check_user_role(message.from_user.id))
 
     user_id = message.from_user.id
-    if user_id in ADMINISTRATION.values():
+    if user_id in tuple(ADMINISTRATION.values()):
         text = (
             "<b>Меню владельца:</b>\n"
             "/add_course — добавить курс\n"
@@ -131,13 +131,15 @@ async def process_name(message: Message, state: FSMContext):
         [InlineKeyboardButton(text="Отклонить", callback_data=f"decline_{user_id}")]
     ])
     
-    for admin_id in ADMIN_IDS + [OWNER_ID]:
+    
+    for admin_id in ALL_ADMINS:
         kb = kb_1 if admin_id == OWNER_ID else kb_2
         await bot.send_message(
             admin_id,
             f"🔔 Запрос на доступ от {fio} (@{username})\nID: <code>{user_id}</code>",
             reply_markup=kb
         )
+
     await message.answer("✅ Сизнинг сўровингиз маъмуриятга юборилди, тасдиқни кутинг.")
     await state.clear()
 
@@ -222,15 +224,16 @@ class LessonFlow:
                 )
             except TelegramBadRequest as e:
                 await self.bot.send_message(user_id, "❗ Видео юбориб бўлмади. Илтимос, админга хабар беринг.")
-                await self.bot.send_message(
-                    ADMINISTRATION.values(),
-                    f"❌ Видео юборишда хато:\n"
-                    f"👤 Фойдаланувчи: [{user_id}](tg://user?id={user_id})\n"
-                    f"📚 Дарс ID: {lesson['id']}\n"
-                    f"🎬 video_file_id: {lesson['video_file_id']}\n"
-                    f"💥 Хатолик: {e.message}",
-                    parse_mode="Markdown"
-                )
+                for admin_id in tuple(ADMINISTRATION.values()):
+                    await self.bot.send_message(
+                        admin_id,
+                        f"❌ Видео юборишда хато:\n"
+                        f"👤 Фойдаланувчи: [{user_id}](tg://user?id={user_id})\n"
+                        f"📚 Дарс ID: {lesson['id']}\n"
+                        f"🎬 video_file_id: {lesson['video_file_id']}\n"
+                        f"💥 Хатолик: {e.message}",
+                        parse_mode="Markdown"
+                    )
 
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(
@@ -379,7 +382,9 @@ async def notify_admin_about_homework(bot, user_or_id, lesson_id, text=None, fil
         ]
     ])
 
-    for admin_id in ADMIN_IDS:
+    for admin_id in ALL_ADMINS:
+        if not admin_id:
+            continue
         try:
             if file_id:
                 await bot.send_document(
@@ -398,6 +403,7 @@ async def notify_admin_about_homework(bot, user_or_id, lesson_id, text=None, fil
                 )
         except Exception as e:
             print(f"❗ Админга {admin_id} юбориб бўлмади: {e}")
+
 
 class HomeworkStates(StatesGroup):
     awaiting_redo_comment = State()
@@ -439,7 +445,7 @@ async def approve_hw_handler(callback: CallbackQuery):
     else:
         # Уроков больше нет — проверим, есть ли следующий курс
         current_course = get_course_by_lesson(lesson_id)
-        next_course = get_next_course(current_course["id"])
+        next_course = get_next_course_for_user(user_id, current_course["id"])
 
         if next_course:
             lessons = get_lessons_by_course(next_course["id"])
@@ -492,7 +498,7 @@ async def redo_hw_comment_handler(message: Message, state: FSMContext):
 @dp.message(Command("sync_lessons"))
 async def sync_lessons_count(message: Message):
     user_id = message.from_user.id
-    if user_id not in ADMINISTRATION.values():
+    if user_id not in tuple(ADMINISTRATION.values()):
         await message.answer("Нет доступа.")
         return
 
@@ -516,7 +522,7 @@ async def make_admin(callback: CallbackQuery):
     add_user_role(user_id, fio, username, "admin")
     await bot.send_message(user_id, f"🎉 Добро пожаловать в команду, админ {fio}!")
 
-    if callback.from_user.id in ADMINISTRATION.values():
+    if callback.from_user.id in tuple(ADMINISTRATION.values()):
         await callback.message.answer(f"✅ Вы предоставили доступ пользователю {fio}.")
     else:
         await bot.send_message(OWNER_ID, f"👤 Админ {callback.from_user.full_name} предоставил доступ пользователю {fio}.")
@@ -546,7 +552,7 @@ class CourseCreation(StatesGroup):
 async def start_course_creation(message: Message, state: FSMContext):
     logging.info(f"Received /add_course from {message.from_user.id}")
     user_id = message.from_user.id
-    if user_id not in ADMINISTRATION.values():
+    if user_id not in tuple(ADMINISTRATION.values()):
         await message.answer("Нет доступа.")
         return
     await state.clear()
@@ -781,7 +787,7 @@ async def decline_course(callback: CallbackQuery):
 
 @dp.callback_query(F.data.regexp(r"^edit_course_\d+$"))
 async def edit_course(callback: CallbackQuery, state: FSMContext):
-    if callback.from_user.id not in ADMINISTRATION.values():  # исправлено!
+    if callback.from_user.id not in tuple(ADMINISTRATION.values()):  # исправлено!
         await callback.message.answer("Нет доступа.")
         return
     course_id = int(callback.data.split("_")[-1])
@@ -825,7 +831,7 @@ class EditCourse(StatesGroup):
     waiting_for_description = State()
 @dp.callback_query(F.data.regexp(r"^edit_course_title_\d+$"))
 async def edit_course_title(callback: CallbackQuery, state: FSMContext):
-    if callback.from_user.id not in ADMINISTRATION.values():
+    if callback.from_user.id not in tuple(ADMINISTRATION.values()):
         await message.answer("Нет доступа.")
         return
     course_id = int(callback.data.split("_")[-1])
@@ -834,7 +840,7 @@ async def edit_course_title(callback: CallbackQuery, state: FSMContext):
     await state.set_state(EditCourse.waiting_for_title)
 @dp.callback_query(F.data.regexp(r"^edit_course_desc_\d+$"))
 async def edit_course_desc(callback: CallbackQuery, state: FSMContext):
-    if callback.from_user.id not in ADMINISTRATION.values():
+    if callback.from_user.id not in tuple(ADMINISTRATION.values()):
         await message.answer("Нет доступа.")
         return
     course_id = int(callback.data.split("_")[-1])
@@ -876,7 +882,7 @@ class AddLesson(StatesGroup):
     waiting_for_extra_material_file = State()
 @dp.callback_query(F.data.startswith("add_lesson_"))
 async def add_lesson_to_course(callback: CallbackQuery, state: FSMContext):
-    if callback.from_user.id in ADMINISTRATION.values():
+    if callback.from_user.id in tuple(ADMINISTRATION.values()):
         course_id = int(callback.data.split("_")[-1])
         await state.update_data(add_lesson_course_id=course_id)
         await callback.message.edit_text("Введите название нового урока:")
@@ -940,7 +946,7 @@ class AddLessonGlobal(StatesGroup):
     waiting_for_course = State()
 @dp.message(Command("add_lesson"))
 async def add_lesson_command(message: Message, state: FSMContext):
-    if message.from_user.id not in ADMINISTRATION.values():
+    if message.from_user.id not in tuple(ADMINISTRATION.values()):
         await message.answer("Нет доступа.")
         return
     courses = get_all_courses()
@@ -987,7 +993,7 @@ class DeleteLessonGlobal(StatesGroup):
     waiting_for_lesson = State()
 @dp.message(Command("delete_lesson"))
 async def delete_lesson_command(message: Message, state: FSMContext):
-    if message.from_user.id not in ADMINISTRATION.values():
+    if message.from_user.id not in tuple(ADMINISTRATION.values()):
         await message.answer("Нет доступа.")
         return
     courses = get_all_courses()
@@ -1032,7 +1038,7 @@ class DeleteCourseGlobal(StatesGroup):
     waiting_for_course = State()
 @dp.message(Command("delete_course"))
 async def delete_course_command(message: Message, state: FSMContext):
-    if message.from_user.id not in ADMINISTRATION.values():
+    if message.from_user.id not in tuple(ADMINISTRATION.values()):
         await message.answer("Нет доступа.")
         return
     courses = get_all_courses()
@@ -1062,7 +1068,7 @@ class EditLesson(StatesGroup):
     waiting_for_extra_material_link = State()
 @dp.callback_query(F.data.startswith("choose_lesson_edit_"))
 async def choose_lesson_edit(callback: CallbackQuery, state: FSMContext):
-    if callback.from_user.id not in ADMINISTRATION.values():
+    if callback.from_user.id not in tuple(ADMINISTRATION.values()):
         await callback.answer("Нет доступа.", show_alert=True)
         return
 
@@ -1114,7 +1120,7 @@ class EditCourseGlobal(StatesGroup):
     waiting_for_course = State()
 @dp.message(Command("edit_course"))
 async def edit_course_command(message: Message, state: FSMContext):
-    if message.from_user.id not in ADMINISTRATION.values():
+    if message.from_user.id not in tuple(ADMINISTRATION.values()):
         await message.answer("Нет доступа.")
         return
     courses = get_all_courses()
@@ -1131,7 +1137,7 @@ async def edit_course_command(message: Message, state: FSMContext):
     await state.set_state(EditCourseGlobal.waiting_for_course)
 @dp.callback_query(F.data.regexp(r"^edit_course_choose_\d+$"), EditCourseGlobal.waiting_for_course)
 async def edit_course_choose(callback: CallbackQuery, state: FSMContext):
-    if callback.from_user.id not in ADMINISTRATION.values():
+    if callback.from_user.id not in tuple(ADMINISTRATION.values()):
         await callback.answer("Нет доступа.", show_alert=True)
         return
     course_id = int(callback.data.split("_")[-1])
@@ -1279,7 +1285,7 @@ async def edit_lesson_menu(message: Message, lesson_id: int, course_id: int):
 @dp.message(Command("courses"))
 async def show_courses(message: Message):
     user_id = message.from_user.id
-    if user_id != OWNER_ID and user_id not in ADMIN_IDS:
+    if user_id != OWNER_ID and user_id not in ADMIN_IDS.values():
         await message.answer("Нет доступа.")
         return
     courses = get_all_courses()
@@ -1296,7 +1302,7 @@ async def show_courses(message: Message):
 @dp.callback_query(F.data.regexp(r"^view_lesson_simple_\d+$"))
 async def view_lesson_simple(callback: CallbackQuery):
     user_id = callback.from_user.id
-    if user_id != OWNER_ID and user_id not in ADMIN_IDS:
+    if user_id != OWNER_ID and user_id not in ADMIN_IDS.values():
         await callback.answer("Нет доступа.", show_alert=True)
         return
     lesson_id = int(callback.data.split("_")[-1])
@@ -1335,7 +1341,7 @@ async def view_lesson_simple(callback: CallbackQuery):
 @dp.callback_query(F.data.regexp(r"^view_course_\d+$"))
 async def view_course(callback: CallbackQuery):
     user_id = callback.from_user.id
-    if user_id != OWNER_ID and user_id not in ADMIN_IDS:
+    if user_id != OWNER_ID and user_id not in ADMIN_IDS.values():
         await callback.answer("Нет доступа.", show_alert=True)
         return
     course_id = int(callback.data.split("_")[-1])

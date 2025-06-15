@@ -35,8 +35,10 @@ def get_admin_ester_id():
     return row[0] if row else None
 
 OWNER_ID = get_owner_id()
-ADMIN_ESTER = get_admin_ester_id()  # Специальный админ Esther
-ADMIN_IDS = get_admin_ids()   
+ADMIN_ESTER = get_admin_ester_id()
+ADMIN_IDS = get_admin_ids()
+ALL_ADMINS = list(set([OWNER_ID, ADMIN_ESTER] + ADMIN_IDS))
+
 ADMINISTRATION = {
     "OWNER_ID": OWNER_ID,
     "ADMIN_ESTER": ADMIN_ESTER
