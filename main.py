@@ -275,6 +275,7 @@ class LessonFlow:
                 reply_markup=kb
             )
 
+
     async def choose_homework_text(self, callback: CallbackQuery, state: FSMContext):
         lesson_id = int(callback.data.split("_")[-1])
         await state.update_data(lesson_id=lesson_id)
@@ -313,6 +314,12 @@ class LessonFlow:
         await message.answer("✅ Файл қабул қилинди.")
         await notify_admin_about_homework(self.bot, user_id, lesson_id, file_id=file_id)
         await state.clear()
+    
+    if lesson.get("extra_material_link"):
+        await self.bot.send_message(user_id, f"📎 Қўшимча ҳавола:\n{lesson['extra_material_link']}")
+
+    if lesson.get("extra_material_file"):
+        await self.bot.send_document(user_id, document=lesson["extra_material_file"])
 
 registration = UserRegistration(bot)
 lesson_flow = LessonFlow(bot)
