@@ -493,10 +493,11 @@ def get_user_lesson_in_progress(user_id: int):
             return {"lesson_id": result[0], "status": result[1]}
         return None
 
-def get_user_by_id(db: Session, user_id: int):
-    query = users.select().where(users.c.id == user_id)
-    return db.execute(query).first()
-
+def get_user_by_id(user_id: int):
+    with SessionLocal() as db:
+        query = users.select().where(users.c.id == user_id)
+        return db.execute(query).first()
+        
 def update_homework_status(user_id: int, lesson_id: int, status: str, comment: str = None):
     session = SessionLocal()
     user_lesson = session.query(UserLesson).filter_by(id=user_id, lesson_id=lesson_id).first()

@@ -7,7 +7,7 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.enums.parse_mode import ParseMode
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.client.default import DefaultBotProperties
-from aiogram.types import Message, InlineKeyboardMarkup, KeyboardButton, InlineKeyboardButton, CallbackQuery, ReplyKeyboardMarkup, InputFile, BotCommandScopeDefault, BotCommand
+from aiogram.types import Message, InlineKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton, InlineKeyboardButton, CallbackQuery, ReplyKeyboardMarkup, InputFile, BotCommandScopeDefault, BotCommand
 from db import ( 
     check_user_role, add_user_role, add_course, add_lesson, update_homework_status,
     update_course_title, update_course_description, get_all_courses, get_next_lesson,
@@ -92,11 +92,11 @@ async def show_menu(message: Message):
         role = check_user_role(user_id)
         if role == "user":
             text = (
-                "<b>Меню пользователя:</b>\n"
-                "/feedback — задать вопрос маъмуриятга\n"
-                "/menu — показать это меню\n"
+                "<b>Фойдаланувчи менюси::</b>\n"
+                "/feedback — маъмуриятга совол юбориш\n"
+                "/menu — менюни кўрсатиш\n"
             )
-            await message.answer(text, reply_markup=user_menu)
+            await message.answer(text, reply_markup=ReplyKeyboardRemove())
         else:
             await message.answer("Сизда рухсат йўқ. Илтимос, рухсатни маъмуриятдан сўранг.")
 
@@ -191,6 +191,8 @@ async def request_letter(callback: CallbackQuery, state: FSMContext):
     )
 
     await callback.answer("Запрос отправлен пользователю.")
+    await callback.message.answer("Запрос отправлен пользователю.")
+
 
 @dp.callback_query(F.data == "letter_text")
 async def wait_letter_text(callback: CallbackQuery, state: FSMContext):
@@ -250,7 +252,7 @@ class UserRegistration:
 
         user_id = int(callback.data.split("_")[2])
 
-        # 🔄 Берём из базы, а не из pending_requests
+
         user = get_user_by_id(user_id)
         fio = user.fio if user else "Без ФИО"
         username = user.username if user else ""
@@ -266,7 +268,8 @@ class UserRegistration:
         # ✅ Отправка пользователю
         await self.bot.send_message(
             user_id, 
-            f"🎉 Табриклаймиз! Сиз талабалар рўйхатидасиз, {fio}."
+            f"🎉 Табриклаймиз! Сиз талабалар рўйхатидасиз, {fio}.",
+            protect_content=True
         )
 
         # ✅ Отправка админу
@@ -297,7 +300,8 @@ class UserRegistration:
             await self.bot.send_message(
                 user_id, 
                 "Дарсни бошлаш учун тугмани босинг:", 
-                reply_markup=kb
+                reply_markup=kb,
+                protect_content=True
             )
 
 class HomeworkType(StatesGroup):
@@ -317,14 +321,15 @@ class LessonFlow:
             return
 
         if lesson.get("workbook"):
-            await self.bot.send_document(user_id, document=lesson["workbook"])
-
+            await self.bot.send_document(user_id, document=lesson["workbook"], protect_content=True)
+                    
         if lesson.get("video_file_id"):
             try:
                 await self.bot.send_video(
                     user_id,
                     video=lesson["video_file_id"],
-                    caption="🎥 Дарс видеоси:"
+                    caption="🎥 Дарс видеоси:",
+                    protect_content=True
                 )
             except TelegramBadRequest as e:
                 await self.bot.send_message(user_id, "❗ Видео юбориб бўлмади. Илтимос, админга хабар беринг.")
@@ -348,11 +353,12 @@ class LessonFlow:
             await self.bot.send_message(
                 user_id,
                 "Агар видеони кўрган бўлсангиз, тугмани босинг:",
-                reply_markup=keyboard
+                reply_markup=keyboard,
+                protect_content=True
             )
             update_user_lesson_status(user_id, lesson_id, "video_not_watched")
         else:
-            await self.bot.send_message(user_id, "Видео мавжуд эмас.")
+            await self.bot.send_message(user_id, "Видео мавжуд эмас.", protect_content=True)
 
     async def handle_video_watched(self, callback: CallbackQuery, state: FSMContext):
         user_id = callback.from_user.id
@@ -364,7 +370,8 @@ class LessonFlow:
         if lesson.get("homework"):
             await self.bot.send_message(
                 user_id, 
-                f"📚 Уй вазифаси: {lesson['homework']}"
+                f"📚 Уй вазифаси: {lesson['homework']}",
+                protect_content=True
             )
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [
@@ -376,7 +383,8 @@ class LessonFlow:
             await self.bot.send_message(
                 user_id,
                 "Қандай шаклда уй вазифасини юбормоқчисиз?",
-                reply_markup=kb
+                reply_markup=kb,
+                protect_content=True
             )
 
     async def choose_homework_text(self, callback: CallbackQuery, state: FSMContext):
@@ -414,10 +422,10 @@ class LessonFlow:
         lesson = get_lesson_by_id(lesson_id)
 
         if lesson.get("extra_material_link"):
-            await self.bot.send_message(user_id, f"📎 Қўшимча ҳавола:\n{lesson['extra_material_link']}")
+            await self.bot.send_message(user_id, f"📎 Қўшимча ҳавола:\n{lesson['extra_material_link']}", protect_content=True)
 
         if lesson.get("extra_material_file"):
-            await self.bot.send_document(user_id, document=lesson["extra_material_file"])
+            await self.bot.send_document(user_id, document=lesson["extra_material_file"], protect_content=True)
 
     async def receive_homework_file(self, message: Message, state: FSMContext):
         data = await state.get_data()
@@ -428,16 +436,16 @@ class LessonFlow:
         save_homework(user_id, lesson_id, None, file_id)
         update_user_lesson_status(user_id, lesson_id, "submitted")
 
-        await message.answer("✅ Файл қабул қилинди.")
+        await message.answer("✅ Файл қабул қилинди.", protect_content=True)
         await notify_admin_about_homework(self.bot, user_id, lesson_id, file_id=file_id)
         await state.clear()
         lesson = get_lesson_by_id(lesson_id)
 
         if lesson.get("extra_material_link"):
-            await self.bot.send_message(user_id, f"📎 Қўшимча ҳавола:\n{lesson['extra_material_link']}")
+            await self.bot.send_message(user_id, f"📎 Қўшимча ҳавола:\n{lesson['extra_material_link']}", protect_content=True)
 
         if lesson.get("extra_material_file"):
-            await self.bot.send_document(user_id, document=lesson["extra_material_file"])
+            await self.bot.send_document(user_id, document=lesson["extra_material_file"], protect_content=True)
 
     async def receive_homework_photo(self, message: Message, state: FSMContext):
         data = await state.get_data()
@@ -454,9 +462,9 @@ class LessonFlow:
 
         lesson = get_lesson_by_id(lesson_id)
         if lesson.get("extra_material_link"):
-            await self.bot.send_message(user_id, f"📎 Қўшимча ҳавола:\n{lesson['extra_material_link']}")
+            await self.bot.send_message(user_id, f"📎 Қўшимча ҳавола:\n{lesson['extra_material_link']}", protect_content=True)
         if lesson.get("extra_material_file"):
-            await self.bot.send_document(user_id, document=lesson["extra_material_file"])
+            await self.bot.send_document(user_id, document=lesson["extra_material_file"], protect_content=True)
 
 registration = UserRegistration(bot)
 lesson_flow = LessonFlow(bot)
@@ -1580,6 +1588,11 @@ async def send_bulk_message(bot, user_ids: list[int], text: str):
         except (TelegramForbiddenError, TelegramBadRequest) as e:
             print(f"🚫 Не удалось {user_id}: {e}")
         await asyncio.sleep(0.4)
+
+@dp.message(F.video)
+async def get_video_id(message: Message):
+    video = message.video
+    await message.answer(f"🎬 Video file_id:\n<code>{video.file_id}</code>", parse_mode="HTML")
 
 async def main():
     # logging.basicConfig(level=logging.INFO)
