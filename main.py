@@ -1,5 +1,5 @@
 import re
-from config import BOT_TOKEN, OWNER_ID, ADMIN_IDS, ADMIN_ESTER, ADMINISTRATION, ALL_ADMINS
+from config import BOT_TOKEN, OWNER_ID, ADMIN_IDS, ADMIN_ESTER, ADMINISTRATION, ALL_ADMINS, ADMIN_GROUP_ID
 from aiogram.filters import Command, or_f, StateFilter
 from aiogram.enums import ChatAction
 from aiogram.fsm.context import FSMContext
@@ -7,18 +7,19 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.enums.parse_mode import ParseMode
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.client.default import DefaultBotProperties
-from aiogram.types import Message, InlineKeyboardMarkup, KeyboardButton, InlineKeyboardButton, CallbackQuery, ReplyKeyboardMarkup, InputFile
+from aiogram.types import Message, InlineKeyboardMarkup, KeyboardButton, InlineKeyboardButton, CallbackQuery, ReplyKeyboardMarkup, InputFile, BotCommandScopeDefault, BotCommand
 from db import ( 
     check_user_role, add_user_role, add_course, add_lesson, update_homework_status,
     update_course_title, update_course_description, get_all_courses, get_next_lesson,
     update_lesson_title, update_lesson_video, delete_course_and_lessons, notify_admin_about_homework,
     update_lesson_homework, update_lesson_extra_material_file, get_user_by_id, get_next_course_for_user,
     update_lesson_extra_material_link, delete_lesson_by_id, UserLesson, Lesson, get_course_by_lesson,
-    get_lessons_by_course, get_course_by_id, approve_course_by_id, save_homework, 
-    update_course_lesson_count, initialize_user_lessons, get_available_courses_for_user,
-    get_first_lesson, create_or_update_user_lesson, submit_homework, approve_homework, 
+    get_lessons_by_course, get_course_by_id, approve_course_by_id, save_homework, save_user_topic_id,
+    update_course_lesson_count, initialize_user_lessons, get_available_courses_for_user, get_user_by_topic_id,
+    get_first_lesson, create_or_update_user_lesson, submit_homework, approve_homework, get_user_topic_id,
     send_homework_for_redo, get_lesson_workbook, get_lesson_extra_materials, get_user_lesson_in_progress,
-    check_homework, SessionLocal, get_first_course, get_lesson_by_id, update_user_lesson_status )
+    check_homework, SessionLocal, get_first_course, get_lesson_by_id, update_user_lesson_status,
+    save_recommendation_letter, User, )
 from welcome_message import welcome_parts
 import asyncio
 from asyncio import sleep
@@ -26,12 +27,15 @@ from aiogram.fsm.storage.memory import MemoryStorage
 import logging
 from aiogram import Router
 from aiogram.enums import ParseMode
+from utils import ensure_topic, generate_topics_for_old_users
+from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest
+
 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 pending_requests = {}
-
 storage = MemoryStorage()
 dp = Dispatcher(bot=bot, storage=storage)
+
 
 print(f'Bot started ')
 @dp.message(F.text == "/start")
@@ -52,14 +56,24 @@ async def cmd_start(message: Message):
             f"Салом, {message.from_user.full_name}! Илтимос, маъмуриятдан рухсат сўранг.",
             reply_markup=kb
         )
+    # await bot.delete_my_commands(scope=BotCommandScopeDefault())
+
+@dp.message(Command("get_topic_id"))
+async def get_topic_id(message: Message):
+    if message.is_topic_message:
+        await message.answer(f"📌 Топик ID: <code>{message.message_thread_id}</code>", parse_mode="HTML")
+    else:
+        await message.answer("❗ Бу буйруқни топик ичида юборинг.")
+
+user_menu = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="/feedback")],
+    ],
+    resize_keyboard=True
+)
 
 @dp.message(Command("menu"))
-async def menu_command(message: Message):
-    print("TRIGGERED /menu")
-    print("Text:", repr(message.text))
-    print("From ID:", message.from_user.id)
-    print("Role:", check_user_role(message.from_user.id))
-
+async def show_menu(message: Message):
     user_id = message.from_user.id
     if user_id in tuple(ADMINISTRATION.values()):
         text = (
@@ -73,21 +87,19 @@ async def menu_command(message: Message):
             "/sync_lessons — синхронизировать количество уроков\n"
             "/menu — показать это меню\n"
         )
+        await message.answer(text)
     else:
-        # Проверяем, есть ли пользователь в базе и его роль
         role = check_user_role(user_id)
         if role == "user":
             text = (
                 "<b>Меню пользователя:</b>\n"
-                "Вам доступен только просмотр курсов.\n"
-                "/courses — просмотр курсов\n"
+                "/feedback — задать вопрос маъмуриятга\n"
                 "/menu — показать это меню\n"
             )
+            await message.answer(text, reply_markup=user_menu)
         else:
-            text = (
-                "Сизда рухсат йўқ. Илтимос, рухсатни маъмуриятдан сўранг."
-            )
-    await message.answer(text)
+            await message.answer("Сизда рухсат йўқ. Илтимос, рухсатни маъмуриятдан сўранг.")
+
 
 async def on_startup(dispatcher):
     await sync_lessons_auto()
@@ -114,37 +126,121 @@ async def handle_request_access(callback: CallbackQuery, state: FSMContext):
     await state.set_state(AccessRequest.waiting_for_name)
     await callback.answer()
 @dp.message(AccessRequest.waiting_for_name)
+
+@dp.message(AccessRequest.waiting_for_name)
 async def process_name(message: Message, state: FSMContext):
     fio = message.text.strip()
     user_id = message.from_user.id
     username = message.from_user.username or message.from_user.full_name
 
+    add_user_role(user_id, fio, username, "none")
     await state.update_data(fio=fio, username=username)
-    pending_requests[user_id] = {"fio": fio, "username": username}
-    kb_1 = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Сделать админом", callback_data=f"make_admin_{user_id}")],
-        [InlineKeyboardButton(text="Сделать участником", callback_data=f"make_user_{user_id}")],
-        [InlineKeyboardButton(text="Отклонить", callback_data=f"decline_{user_id}")]
-    ])
+
+    # 🔹 Создаём топик для этого юзера
+    topic_id = get_user_topic_id(user_id)
+    if not topic_id:
+        topic_id = await ensure_topic(bot, user_id, fio, username)
+        save_user_topic_id(user_id, topic_id)
+
     kb_2 = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Сделать участником", callback_data=f"make_user_{user_id}")],
-        [InlineKeyboardButton(text="Отклонить", callback_data=f"decline_{user_id}")]
+        [InlineKeyboardButton(text="Отклонить", callback_data=f"decline_{user_id}")],
+        [InlineKeyboardButton(text="📜 Запросить тавсиянома", callback_data=f"request_letter_{user_id}")]
     ])
     
-    
-    for admin_id in ALL_ADMINS:
-        kb = kb_1 if admin_id == OWNER_ID else kb_2
-        await bot.send_message(
-            admin_id,
-            f"🔔 Запрос на доступ от {fio} (@{username})\nID: <code>{user_id}</code>",
-            reply_markup=kb
-        )
+    await bot.send_message(
+        chat_id=ADMIN_GROUP_ID,
+        message_thread_id=topic_id,
+        text=f"🔔 Запрос на доступ от {fio} (@{username})\nID: <code>{user_id}</code>",
+        reply_markup=kb_2,
+        parse_mode="HTML"
+    )
 
     await message.answer("✅ Сизнинг сўровингиз маъмуриятга юборилди, тасдиқни кутинг.")
     await state.clear()
 
+class RecommendationLetter(StatesGroup):
+    waiting_for_text = State()
+    waiting_for_photo = State()
+
+@dp.callback_query(F.data.startswith("request_letter_"))
+async def request_letter(callback: CallbackQuery, state: FSMContext):
+    user_id = int(callback.data.split("_")[2])
+    await state.update_data(letter_user_id=user_id)
+
+    await bot.send_message(
+        chat_id=user_id,
+        text=(
+            "Худонинг тинчлиги бўлсин.\n"
+            "Онлайн академияда ўқишингиз учун, чўпонингизга тавсиянома ёздириб, бизга юборинг.\n\n"
+            "<b>Тавсияномада қуйидаги маълумотлар бўлиши мақсадга мувофиқ:</b>\n"
+            "1. Исм фамилиянгиз\n"
+            "2. Вилоят/шаҳар номи\n"
+            "3. Чўпонингиз исми\n"
+            "4. Жамоатингиз номи\n"
+            "5. Матн намунаси: “Мен «______» номли Жамоатнинг чўпони ______ жамоат аъзоси _____________ нинг Онлайн Академияда ўқишига розилик билдираман”. Имзо. Сана\n\n"
+            "👇 Қуйидагилардан бирини танланг:"
+        ),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="📝 Тавсиянома (текст)", callback_data="letter_text"),
+                InlineKeyboardButton(text="📷 Тавсиянома (фото)", callback_data="letter_photo")
+            ]
+        ]),
+        parse_mode="HTML"
+    )
+
+    await callback.answer("Запрос отправлен пользователю.")
+
+@dp.callback_query(F.data == "letter_text")
+async def wait_letter_text(callback: CallbackQuery, state: FSMContext):
+    await callback.message.answer("📝 Илтимос, тавсияномани матн кўринишида ёзинг:")
+    await state.set_state(RecommendationLetter.waiting_for_text)
+    await callback.answer()
+
+@dp.callback_query(F.data == "letter_photo")
+async def wait_letter_photo(callback: CallbackQuery, state: FSMContext):
+    await callback.message.answer("📷 Илтимос, тавсиянома сурат кўринишида юборинг:")
+    await state.set_state(RecommendationLetter.waiting_for_photo)
+    await callback.answer()
+
+@dp.message(RecommendationLetter.waiting_for_text)
+async def handle_letter_text(message: Message, state: FSMContext):
+    data = await state.get_data()
+    user_id = message.from_user.id
+    text = message.text
+    save_recommendation_letter(user_id, text, None)  # ⬅️ в БД
+    topic_id = get_user_topic_id(user_id)
+
+    await bot.send_message(
+        ADMIN_GROUP_ID,
+        f"📜 <b>Тавсиянома (текст)</b>\n👤 {message.from_user.full_name}\n\n{text}",
+        message_thread_id=topic_id,
+        parse_mode="HTML"
+    )
+    await message.answer("✅ Тавсиянома қабул қилинди.")
+    await state.clear()
+
+@dp.message(RecommendationLetter.waiting_for_photo)
+async def handle_letter_photo(message: Message, state: FSMContext):
+    data = await state.get_data()
+    user_id = message.from_user.id
+    file_id = message.photo[-1].file_id
+    save_recommendation_letter(user_id, None, file_id)  # ⬅️ в БД
+    topic_id = get_user_topic_id(user_id)
+
+    await bot.send_photo(
+        ADMIN_GROUP_ID,
+        file_id,
+        caption=f"📜 <b>Тавсиянома (фото)</b>\n👤 {message.from_user.full_name}",
+        message_thread_id=topic_id,
+        parse_mode="HTML"
+    )
+    await message.answer("✅ Тавсиянома қабул қилинди.")
+    await state.clear()
+
 class UserRegistration:
-    
+        
     def __init__(self, bot):
         self.bot = bot
         self.lesson_flow = LessonFlow(bot)
@@ -152,21 +248,28 @@ class UserRegistration:
     async def approve_user(self, callback: CallbackQuery):
         await callback.answer()
 
-        """Подтверждение регистрации пользователя"""
         user_id = int(callback.data.split("_")[2])
-        req = pending_requests.pop(user_id, None)
-        fio = req["fio"] if req else "Без ФИО"
-        username = req["username"] if req else ""
+
+        # 🔄 Берём из базы, а не из pending_requests
+        user = get_user_by_id(user_id)
+        fio = user.fio if user else "Без ФИО"
+        username = user.username if user else ""
 
         add_user_role(user_id, fio, username, "user")
-        
-        # Отправка уведомлений
+
+        # 🔄 Проверяем и создаём топик (на всякий случай)
+        topic_id = get_user_topic_id(user_id)
+        if not topic_id:
+            topic_id = await ensure_topic(self.bot, user_id, fio, username)
+            save_user_topic_id(user_id, topic_id)
+
+        # ✅ Отправка пользователю
         await self.bot.send_message(
             user_id, 
             f"🎉 Табриклаймиз! Сиз талабалар рўйхатидасиз, {fio}."
         )
-        
-        # Уведомление админа
+
+        # ✅ Отправка админу
         if callback.from_user.id == OWNER_ID:
             await callback.message.answer(f"✅ Вы предоставили доступ пользователю {fio}.")
         else:
@@ -178,7 +281,7 @@ class UserRegistration:
 
         await send_welcome_message(self.bot, user_id)
 
-        # Инициализация первого урока
+        # ✅ Инициализация первого урока
         course = get_first_course()
         lessons = get_lessons_by_course(course["id"])
         if lessons:
@@ -201,6 +304,7 @@ class HomeworkType(StatesGroup):
     choosing_type = State()
     waiting_for_text = State()
     waiting_for_file = State()
+    waiting_for_photo = State()
 
 class LessonFlow:
     def __init__(self, bot):
@@ -262,11 +366,11 @@ class LessonFlow:
                 user_id, 
                 f"📚 Уй вазифаси: {lesson['homework']}"
             )
-
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [
                     InlineKeyboardButton(text="📝 Текст", callback_data=f"homework_text_{lesson_id}"),
-                    InlineKeyboardButton(text="📄 Файл", callback_data=f"homework_file_{lesson_id}")
+                    InlineKeyboardButton(text="📄 Файл", callback_data=f"homework_file_{lesson_id}"),
+                    InlineKeyboardButton(text="📷 Фото", callback_data=f"homework_photo_{lesson_id}")
                 ]
             ])
             await self.bot.send_message(
@@ -274,7 +378,6 @@ class LessonFlow:
                 "Қандай шаклда уй вазифасини юбормоқчисиз?",
                 reply_markup=kb
             )
-
 
     async def choose_homework_text(self, callback: CallbackQuery, state: FSMContext):
         lesson_id = int(callback.data.split("_")[-1])
@@ -290,6 +393,13 @@ class LessonFlow:
         await state.set_state(HomeworkType.waiting_for_file)
         await callback.answer()
 
+    async def choose_homework_photo(self, callback: CallbackQuery, state: FSMContext):
+        lesson_id = int(callback.data.split("_")[-1])
+        await state.update_data(lesson_id=lesson_id)
+        await callback.message.answer("📷 Илтимос, расмни юборинг:")
+        await state.set_state(HomeworkType.waiting_for_photo)
+        await callback.answer()
+
     async def receive_homework_text(self, message: Message, state: FSMContext):
         data = await state.get_data()
         user_id = message.from_user.id
@@ -301,6 +411,13 @@ class LessonFlow:
         await message.answer("✅ Матн қабул қилинди.")
         await notify_admin_about_homework(self.bot, user_id, lesson_id, text=message.text)
         await state.clear()
+        lesson = get_lesson_by_id(lesson_id)
+
+        if lesson.get("extra_material_link"):
+            await self.bot.send_message(user_id, f"📎 Қўшимча ҳавола:\n{lesson['extra_material_link']}")
+
+        if lesson.get("extra_material_file"):
+            await self.bot.send_document(user_id, document=lesson["extra_material_file"])
 
     async def receive_homework_file(self, message: Message, state: FSMContext):
         data = await state.get_data()
@@ -314,12 +431,32 @@ class LessonFlow:
         await message.answer("✅ Файл қабул қилинди.")
         await notify_admin_about_homework(self.bot, user_id, lesson_id, file_id=file_id)
         await state.clear()
-    
-    if lesson.get("extra_material_link"):
-        await self.bot.send_message(user_id, f"📎 Қўшимча ҳавола:\n{lesson['extra_material_link']}")
+        lesson = get_lesson_by_id(lesson_id)
 
-    if lesson.get("extra_material_file"):
-        await self.bot.send_document(user_id, document=lesson["extra_material_file"])
+        if lesson.get("extra_material_link"):
+            await self.bot.send_message(user_id, f"📎 Қўшимча ҳавола:\n{lesson['extra_material_link']}")
+
+        if lesson.get("extra_material_file"):
+            await self.bot.send_document(user_id, document=lesson["extra_material_file"])
+
+    async def receive_homework_photo(self, message: Message, state: FSMContext):
+        data = await state.get_data()
+        user_id = message.from_user.id
+        lesson_id = data["lesson_id"]
+
+        photo_id = message.photo[-1].file_id
+        save_homework(user_id, lesson_id, None, photo_id)
+        update_user_lesson_status(user_id, lesson_id, "submitted")
+
+        await message.answer("✅ Расм қабул қилинди.")
+        await notify_admin_about_homework(self.bot, user_id, lesson_id, file_id=photo_id)
+        await state.clear()
+
+        lesson = get_lesson_by_id(lesson_id)
+        if lesson.get("extra_material_link"):
+            await self.bot.send_message(user_id, f"📎 Қўшимча ҳавола:\n{lesson['extra_material_link']}")
+        if lesson.get("extra_material_file"):
+            await self.bot.send_document(user_id, document=lesson["extra_material_file"])
 
 registration = UserRegistration(bot)
 lesson_flow = LessonFlow(bot)
@@ -343,6 +480,10 @@ async def cb_homework_text(callback: CallbackQuery, state: FSMContext):
 async def cb_homework_file(callback: CallbackQuery, state: FSMContext):
     await lesson_flow.choose_homework_file(callback, state)
 
+@dp.callback_query(F.data.startswith("homework_photo_"))
+async def cb_homework_photo(callback: CallbackQuery, state: FSMContext):
+    await lesson_flow.choose_homework_photo(callback, state)
+
 @dp.message(HomeworkType.waiting_for_text)
 async def msg_homework_text(message: Message, state: FSMContext):
     await lesson_flow.receive_homework_text(message, state)
@@ -350,6 +491,10 @@ async def msg_homework_text(message: Message, state: FSMContext):
 @dp.message(HomeworkType.waiting_for_file, F.document)
 async def msg_homework_file(message: Message, state: FSMContext):
     await lesson_flow.receive_homework_file(message, state)
+
+@dp.message(HomeworkType.waiting_for_photo, F.photo)
+async def msg_homework_photo(message: Message, state: FSMContext):
+    await lesson_flow.receive_homework_photo(message, state)
 
 @dp.callback_query(F.data.startswith("make_user_"))
 async def make_user_handler(callback: CallbackQuery):
@@ -361,7 +506,7 @@ async def notify_admin_about_homework(bot, user_or_id, lesson_id, text=None, fil
     else:
         user = user_or_id
 
-    user_id = user.id  # ✅ добавляем эту строку
+    user_id = user.id
 
     full_name = user.full_name or f"ID {user.id}"
     username = f"(@{user.username})" if user.username else ""
@@ -377,10 +522,8 @@ async def notify_admin_about_homework(bot, user_or_id, lesson_id, text=None, fil
     )
 
     if text:
-        # escape '<' and '>' from text
         safe_text = text.replace("<", "&lt;").replace(">", "&gt;")
         caption += f"\n📝 Жавоб:\n{safe_text}"
-
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -389,27 +532,38 @@ async def notify_admin_about_homework(bot, user_or_id, lesson_id, text=None, fil
         ]
     ])
 
-    for admin_id in ALL_ADMINS:
-        if not admin_id:
-            continue
+    topic_id = get_user_topic_id(user_id)
+    if topic_id:
         try:
             if file_id:
-                await bot.send_document(
-                    admin_id,
-                    document=file_id,
-                    caption=caption,
-                    parse_mode="html",
-                    reply_markup=keyboard
-                )
+                if file_id.startswith("AgAC"):  # Telegram photo_id prefix
+                    await bot.send_photo(
+                        chat_id=ADMIN_GROUP_ID,
+                        message_thread_id=topic_id,
+                        photo=file_id,
+                        caption=caption,
+                        parse_mode="html",
+                        reply_markup=keyboard
+                    )
+                else:
+                    await bot.send_document(
+                        chat_id=ADMIN_GROUP_ID,
+                        message_thread_id=topic_id,
+                        document=file_id,
+                        caption=caption,
+                        parse_mode="html",
+                        reply_markup=keyboard
+                    )
             else:
                 await bot.send_message(
-                    admin_id,
-                    caption,
+                    chat_id=ADMIN_GROUP_ID,
+                    message_thread_id=topic_id,
+                    text=caption,
                     parse_mode="html",
                     reply_markup=keyboard
                 )
         except Exception as e:
-            print(f"❗ Админга {admin_id} юбориб бўлмади: {e}")
+            print(f"❗ Ошибка при отправке: {e}")
 
 
 class HomeworkStates(StatesGroup):
@@ -741,11 +895,15 @@ async def save_course_to_db(user_id: int, state: FSMContext):
 
     markup = InlineKeyboardMarkup(inline_keyboard=lesson_buttons + action_buttons)
 
-    await bot.send_message(
-        OWNER_ID,
-        "Проверьте созданный курс и завершите создание курса.",
-        reply_markup=markup
-    )
+    topic_id = get_user_topic_id(user_id)
+    if topic_id:
+        await bot.send_message(
+            chat_id=ADMIN_GROUP_ID,
+            message_thread_id=topic_id,
+            text="Проверьте созданный курс и завершите создание курса.",
+            reply_markup=markup
+        )
+
 
 @dp.callback_query(F.data.regexp(r"^view_lesson_\d+_\d+$"))
 async def view_lesson(callback: CallbackQuery):
@@ -1364,11 +1522,72 @@ async def view_course(callback: CallbackQuery):
     await callback.message.edit_text(text, reply_markup=kb)
 
 
+class Feedback(StatesGroup):
+    waiting_for_message = State()
+
+@dp.message(Command("feedback"))
+async def start_feedback(message: Message, state: FSMContext):
+    await message.answer("✉️ Хабарингизни ёзинг:")
+    await state.set_state(Feedback.waiting_for_message)
+
+@dp.message(Feedback.waiting_for_message)
+async def process_feedback(message: Message, state: FSMContext):
+    user = message.from_user
+    user_id = user.id
+    fio = user.full_name
+    username = user.username or ""
+    
+    topic_id = get_user_topic_id(user_id)
+    if not topic_id:
+        topic_id = await ensure_topic(bot, user_id, fio, username)
+        save_user_topic_id(user_id, topic_id)
+
+    header = f"📨 Feedback от {fio} (@{username}):"
+
+    # Определяем тип сообщения
+    if message.text:
+        await bot.send_message(ADMIN_GROUP_ID, header + f"\n\n{message.text}", message_thread_id=topic_id)
+    elif message.document:
+        await bot.send_document(ADMIN_GROUP_ID, message.document.file_id, caption=header, message_thread_id=topic_id)
+    elif message.photo:
+        await bot.send_photo(ADMIN_GROUP_ID, message.photo[-1].file_id, caption=header, message_thread_id=topic_id)
+    else:
+        await message.answer("❗Формат не поддерживается.")
+
+    await message.answer("✅ Хабарингиз маъмуриятга юборилди.")
+    await state.clear()
+
+@dp.message(F.chat.id == ADMIN_GROUP_ID, F.is_topic_message)
+async def admin_reply_to_user(message: Message):
+    user = get_user_by_topic_id(message.message_thread_id)
+    if not user:
+        return
+
+    text = message.text or message.caption
+    if not text:
+        return
+
+    try:
+        await bot.send_message(user.id, f"💬 Маъмуриятдан:\n{text}")
+    except:
+        await message.reply("❗ Юбориб бўлмади.")
+
+async def send_bulk_message(bot, user_ids: list[int], text: str):
+    for user_id in user_ids:
+        try:
+            await bot.send_message(user_id, text)
+            print(f"✅ Успешно: {user_id}")
+        except (TelegramForbiddenError, TelegramBadRequest) as e:
+            print(f"🚫 Не удалось {user_id}: {e}")
+        await asyncio.sleep(0.4)
 
 async def main():
     # logging.basicConfig(level=logging.INFO)
+    # await generate_topics_for_old_users(bot)
+
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
     import asyncio
+
     asyncio.run(main())

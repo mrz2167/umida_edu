@@ -3,6 +3,8 @@ from sqlalchemy.orm import sessionmaker, declarative_base, Session
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from datetime import datetime
 import os
+from sqlalchemy.sql import func
+
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
@@ -16,7 +18,52 @@ user_lessons = Table('user_lessons', metadata, autoload_with=engine)
 
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
+class Lesson(Base):
+    __tablename__ = "lessons"
 
+    id = Column(Integer, primary_key=True)
+    course_id = Column(Integer, nullable=True)
+    title = Column(Text, nullable=False)
+    video_file_id = Column(Text, nullable=True)
+    homework = Column(Text, nullable=True)
+    extra_material_file = Column(Text, nullable=True)
+    extra_material_link = Column(Text, nullable=True)
+    workbook = Column(Text, nullable=True)
+
+class UserLesson(Base):
+    __tablename__ = "user_lessons"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False)
+    lesson_id = Column(Integer, ForeignKey("lessons.id"))
+    status = Column(String, nullable=False)
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(BigInteger, primary_key=True)
+    fio = Column(Text, nullable=False)
+    username = Column(Text)
+    role = Column(Text, nullable=False)
+    topic_id = Column(BigInteger)
+
+class RecommendationLetter(Base):
+    __tablename__ = "recommendation_letters"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, nullable=False)
+    text = Column(Text)
+    photo_id = Column(Text)
+    created_at = Column(TIMESTAMP, server_default=func.now())
+
+def save_recommendation_letter(user_id: int, text: str | None, photo_id: str | None):
+    with SessionLocal() as session:
+        letter = RecommendationLetter(
+            user_id=user_id,
+            text=text,
+            photo_id=photo_id
+        )
+        session.add(letter)
+        session.commit()
 
 def check_user_role(user_id):
     with engine.connect() as conn:
@@ -206,8 +253,6 @@ def get_course_by_lesson(lesson_id: int):
                 select(courses).where(courses.c.id == result)
             ).mappings().first()
         return None
-
-
 
 def get_lesson_by_id(lesson_id: int):
     with engine.connect() as conn:
@@ -437,26 +482,6 @@ def get_first_course():
     with engine.connect() as conn:
         return conn.execute(query).mappings().first()
 
-class Lesson(Base):
-    __tablename__ = "lessons"
-
-    id = Column(Integer, primary_key=True)
-    course_id = Column(Integer, nullable=True)
-    title = Column(Text, nullable=False)
-    video_file_id = Column(Text, nullable=True)
-    homework = Column(Text, nullable=True)
-    extra_material_file = Column(Text, nullable=True)
-    extra_material_link = Column(Text, nullable=True)
-    workbook = Column(Text, nullable=True)
-
-class UserLesson(Base):
-    __tablename__ = "user_lessons"
-
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, nullable=False)
-    lesson_id = Column(Integer, ForeignKey("lessons.id"))
-    status = Column(String, nullable=False)
-
 def get_user_lesson_in_progress(user_id: int):
     with engine.connect() as conn:
         result = conn.execute(
@@ -474,14 +499,13 @@ def get_user_by_id(db: Session, user_id: int):
 
 def update_homework_status(user_id: int, lesson_id: int, status: str, comment: str = None):
     session = SessionLocal()
-    user_lesson = session.query(UserLesson).filter_by(user_id=user_id, lesson_id=lesson_id).first()
+    user_lesson = session.query(UserLesson).filter_by(id=user_id, lesson_id=lesson_id).first()
     if user_lesson:
         user_lesson.status = status
         if comment:
             user_lesson.comment = comment
         session.commit()
     session.close()
-
 
 def get_next_lesson(user_id: int, current_lesson_id: int):
     with engine.connect() as conn:
@@ -529,4 +553,18 @@ def get_next_course_for_user(user_id: int, current_course_id: int):
         print("Следующий курс:", next_course.id)
         return None
 
+def save_user_topic_id(user_id: int, topic_id: int):
+    with SessionLocal() as session:
+        user = session.query(User).filter_by(id=user_id).first()
+        if user:
+            user.topic_id = topic_id
+            session.commit()
 
+def get_user_topic_id(user_id: int) -> int | None:
+    with SessionLocal() as session:
+        user = session.query(User).filter_by(id=user_id).first()
+        return user.topic_id if user else None
+
+def get_user_by_topic_id(topic_id: int):
+    with SessionLocal() as session:
+        return session.query(User).filter_by(topic_id=topic_id).first()
