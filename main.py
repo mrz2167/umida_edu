@@ -1,14 +1,32 @@
 import re
-from config import BOT_TOKEN, OWNER_ID, ADMIN_IDS, ADMIN_ESTER, ADMINISTRATION, ALL_ADMINS, ADMIN_GROUP_ID
-from aiogram.filters import Command, or_f, StateFilter
-from aiogram.enums import ChatAction
+import asyncio
+import logging
+from asyncio import sleep
+from datetime import datetime
+
+from aiogram import BaseMiddleware
+from aiogram.types import TelegramObject
 from aiogram.fsm.context import FSMContext
-from aiogram import Bot, Dispatcher, types, F
-from aiogram.enums.parse_mode import ParseMode
+from aiogram.enums import ChatAction, ParseMode
+from aiogram.types.input_file import FSInputFile
 from aiogram.fsm.state import StatesGroup, State
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram import Bot, Dispatcher, F, Router, types
+from aiogram.filters import Command, or_f, StateFilter
 from aiogram.client.default import DefaultBotProperties
-from aiogram.types import Message, InlineKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton, InlineKeyboardButton, CallbackQuery, ReplyKeyboardMarkup, InputFile, BotCommandScopeDefault, BotCommand
-from db import ( 
+from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest
+
+from aiogram.types import (
+    Message, CallbackQuery,
+    InlineKeyboardMarkup, InlineKeyboardButton,
+    KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove,
+    BotCommand, BotCommandScopeDefault)
+
+from config import (
+    BOT_TOKEN, OWNER_ID, ADMIN_IDS, ADMIN_ESTER,
+    ADMINISTRATION, ALL_ADMINS, ADMIN_GROUP_ID)
+
+from db import (
     check_user_role, add_user_role, add_course, add_lesson, update_homework_status,
     update_course_title, update_course_description, get_all_courses, get_next_lesson,
     update_lesson_title, update_lesson_video, delete_course_and_lessons, notify_admin_about_homework,
@@ -20,21 +38,46 @@ from db import (
     send_homework_for_redo, get_lesson_workbook, get_lesson_extra_materials, get_user_lesson_in_progress,
     check_homework, SessionLocal, get_first_course, get_lesson_by_id, update_user_lesson_status,
     save_recommendation_letter, User, )
-from welcome_message import welcome_parts
-import asyncio
-from asyncio import sleep
-from aiogram.fsm.storage.memory import MemoryStorage
-import logging
-from aiogram import Router
-from aiogram.enums import ParseMode
-from utils import ensure_topic, generate_topics_for_old_users
-from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest
 
+from welcome_message import welcome_parts
+from utils import ensure_topic, generate_topics_for_old_users
 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 pending_requests = {}
 storage = MemoryStorage()
 dp = Dispatcher(bot=bot, storage=storage)
+dev_id = 6774411424
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(message)s',
+    handlers=[
+        logging.FileHandler("bot_activity.log"),
+        # logging.StreamHandler()  # ← вывод в терминал
+    ]
+)
+logging.info("🔁 Logger initialized")
+
+class MessageLoggerMiddleware(BaseMiddleware):
+    async def __call__(self, handler, event: TelegramObject, data: dict):
+        if isinstance(event, Message):
+            from_user = event.from_user.id
+            if event.text:
+                logging.info(f"[IN] From {from_user} | Text: {event.text}")
+            elif event.photo:
+                logging.info(f"[IN] From {from_user} | Photo received")
+            elif event.document:
+                logging.info(f"[IN] From {from_user} | Document: {event.document.file_name}")
+        return await handler(event, data)
+
+
+@dp.message(Command("logs"))
+async def send_logs(message: Message):
+    if message.from_user.id == 6774411424:
+        await message.answer_document(FSInputFile("bot_activity.log"))
+    else:
+        await message.answer("⛔ Рухсат йўқ.")
 
 
 print(f'Bot started ')
@@ -193,7 +236,6 @@ async def request_letter(callback: CallbackQuery, state: FSMContext):
     await callback.answer("Запрос отправлен пользователю.")
     await callback.message.answer("Запрос отправлен пользователю.")
 
-
 @dp.callback_query(F.data == "letter_text")
 async def wait_letter_text(callback: CallbackQuery, state: FSMContext):
     await callback.message.answer("📝 Илтимос, тавсияномани матн кўринишида ёзинг:")
@@ -209,9 +251,11 @@ async def wait_letter_photo(callback: CallbackQuery, state: FSMContext):
 @dp.message(RecommendationLetter.waiting_for_text)
 async def handle_letter_text(message: Message, state: FSMContext):
     data = await state.get_data()
-    user_id = message.from_user.id
+    user_id = data.get("letter_user_id", message.from_user.id)
+
     text = message.text
-    save_recommendation_letter(user_id, text, None)  # ⬅️ в БД
+    save_recommendation_letter(user_id, text, None)
+
     topic_id = get_user_topic_id(user_id)
 
     await bot.send_message(
@@ -226,9 +270,11 @@ async def handle_letter_text(message: Message, state: FSMContext):
 @dp.message(RecommendationLetter.waiting_for_photo)
 async def handle_letter_photo(message: Message, state: FSMContext):
     data = await state.get_data()
-    user_id = message.from_user.id
+    user_id = data.get("letter_user_id", message.from_user.id)
+
     file_id = message.photo[-1].file_id
-    save_recommendation_letter(user_id, None, file_id)  # ⬅️ в БД
+    save_recommendation_letter(user_id, None, file_id)
+
     topic_id = get_user_topic_id(user_id)
 
     await bot.send_photo(
@@ -1458,7 +1504,7 @@ async def edit_lesson_menu(message: Message, lesson_id: int, course_id: int):
 @dp.message(Command("courses"))
 async def show_courses(message: Message):
     user_id = message.from_user.id
-    if user_id != OWNER_ID and user_id not in ADMIN_IDS.values():
+    if user_id not in ALL_ADMINS.values():
         await message.answer("Нет доступа.")
         return
     courses = get_all_courses()
@@ -1475,7 +1521,7 @@ async def show_courses(message: Message):
 @dp.callback_query(F.data.regexp(r"^view_lesson_simple_\d+$"))
 async def view_lesson_simple(callback: CallbackQuery):
     user_id = callback.from_user.id
-    if user_id != OWNER_ID and user_id not in ADMIN_IDS.values():
+    if user_id not in ALL_ADMINS.values():
         await callback.answer("Нет доступа.", show_alert=True)
         return
     lesson_id = int(callback.data.split("_")[-1])
@@ -1514,7 +1560,7 @@ async def view_lesson_simple(callback: CallbackQuery):
 @dp.callback_query(F.data.regexp(r"^view_course_\d+$"))
 async def view_course(callback: CallbackQuery):
     user_id = callback.from_user.id
-    if user_id != OWNER_ID and user_id not in ADMIN_IDS.values():
+    if user_id not in ALL_ADMINS.values():
         await callback.answer("Нет доступа.", show_alert=True)
         return
     course_id = int(callback.data.split("_")[-1])
@@ -1589,18 +1635,34 @@ async def send_bulk_message(bot, user_ids: list[int], text: str):
             print(f"🚫 Не удалось {user_id}: {e}")
         await asyncio.sleep(0.4)
 
-@dp.message(F.video)
-async def get_video_id(message: Message):
-    video = message.video
-    await message.answer(f"🎬 Video file_id:\n<code>{video.file_id}</code>", parse_mode="HTML")
+
+async def send_warning(bot, user_ids: list[int]):
+    text = """Бот фаолиятини янгилади. Дарсларни ўтишда давом этишингиз мумкин."""
+    for user_id in user_ids:
+        try:
+            await bot.send_message(user_id, text)
+            print(f"✅ Юборилди: {user_id}")
+        except (TelegramForbiddenError, TelegramBadRequest) as e:
+            print(f"🚫 Ўтказилди: {user_id} | {e}")
+        await asyncio.sleep(0.3)
+
+def get_all_user_ids():
+    try:
+        with SessionLocal() as session:
+            return [user.id for user in session.query(User).all()]
+    except Exception as e:
+        print(f"❗ DB error: {e}")
+        return []
+
 
 async def main():
-    # logging.basicConfig(level=logging.INFO)
-    # await generate_topics_for_old_users(bot)
+    dp.message.middleware(MessageLoggerMiddleware())
+    # await dp.start_polling(bot)
 
-    await dp.start_polling(bot)
+    user_ids = get_all_user_ids()
+    await send_warning(bot, user_ids)
+
 
 if __name__ == "__main__":
     import asyncio
-
     asyncio.run(main())

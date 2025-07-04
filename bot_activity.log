@@ -1,0 +1,38 @@
+2025-07-04 11:04:45,610 - 🔁 Logger initialized
+2025-07-04 11:08:04,094 - 🔁 Logger initialized
+2025-07-04 11:09:01,520 - 🔁 Logger initialized
+2025-07-04 11:09:01,545 - Start polling
+2025-07-04 11:09:01,900 - Run polling for bot @umid_akademiyasi_bot id=8113715412 - 'umid_akademiyasi_bot'
+2025-07-04 11:09:10,454 - [IN] From 6774411424 | Text: /start
+2025-07-04 11:09:11,256 - Update id=295030788 is handled. Duration 803 ms by bot id=8113715412
+2025-07-04 11:09:21,570 - Update id=295030789 is handled. Duration 233 ms by bot id=8113715412
+2025-07-04 11:09:27,007 - [IN] From 44319692 | Text: Надеюсь, на этом все
+2025-07-04 11:09:30,068 - Update id=295030790 is handled. Duration 3063 ms by bot id=8113715412
+2025-07-04 11:09:45,582 - Update id=295030791 is not handled. Duration 12 ms by bot id=8113715412
+2025-07-04 11:09:56,839 - Update id=295030792 is handled. Duration 1890 ms by bot id=8113715412
+2025-07-04 11:10:00,221 - [IN] From 1087968824 | Text: Урааа
+2025-07-04 11:10:00,730 - Update id=295030793 is handled. Duration 519 ms by bot id=8113715412
+2025-07-04 11:10:24,006 - Update id=295030794 is not handled. Duration 14 ms by bot id=8113715412
+2025-07-04 11:10:35,546 - [IN] From 1087968824 | Text: Ураааа
+2025-07-04 11:10:36,057 - Update id=295030795 is handled. Duration 529 ms by bot id=8113715412
+2025-07-04 11:10:39,653 - [IN] From 1087968824 | Text: Пон
+2025-07-04 11:10:40,432 - Update id=295030796 is handled. Duration 796 ms by bot id=8113715412
+2025-07-04 11:10:49,582 - Update id=295030797 is not handled. Duration 12 ms by bot id=8113715412
+2025-07-04 11:10:55,665 - Update id=295030798 is not handled. Duration 7 ms by bot id=8113715412
+2025-07-04 11:12:39,576 - Received SIGINT signal
+2025-07-04 11:12:39,579 - Polling stopped for bot @umid_akademiyasi_bot id=8113715412 - 'umid_akademiyasi_bot'
+2025-07-04 11:12:39,579 - Polling stopped
+2025-07-04 11:12:56,447 - 🔁 Logger initialized
+2025-07-04 11:12:56,472 - Start polling
+2025-07-04 11:12:56,801 - Run polling for bot @umid_akademiyasi_bot id=8113715412 - 'umid_akademiyasi_bot'
+2025-07-04 11:12:58,664 - [IN] From 6774411424 | Text: /logs
+2025-07-04 11:12:59,282 - Update id=295030799 is handled. Duration 617 ms by bot id=8113715412
+2025-07-04 11:18:56,528 - Received SIGINT signal
+2025-07-04 11:18:56,530 - Polling stopped for bot @umid_akademiyasi_bot id=8113715412 - 'umid_akademiyasi_bot'
+2025-07-04 11:18:56,530 - Polling stopped
+2025-07-04 11:24:01,381 - 🔁 Logger initialized
+2025-07-04 11:24:28,060 - Unclosed client session
+client_session: <aiohttp.client.ClientSession object at 0x7f16b7a501a0>
+2025-07-04 11:24:28,060 - Unclosed connector
+connections: ['deque([(<aiohttp.client_proto.ResponseHandler object at 0x7f16b7bdba70>, 9474.345563727)])']
+connector: <aiohttp.connector.TCPConnector object at 0x7f16b7b57a10>

@@ -43,10 +43,8 @@ ADMINISTRATION = {
     "OWNER_ID": OWNER_ID,
     "ADMIN_ESTER": ADMIN_ESTER
 }
-# ADMIN_GROUP_ID
 
-print(f"Owner ID: {OWNER_ID}")
-print(f"Admin Esther ID: {ADMIN_ESTER}")
-print(f"Admin IDs: {ADMIN_IDS}")
-print("ADMINISTRATION:", ADMINISTRATION)
-print(os.getenv("BOT_TOKEN"))
+# print(f"Owner ID: {OWNER_ID}")
+# print(f"Admin Esther ID: {ADMIN_ESTER}")
+# print(f"Admin IDs: {ADMIN_IDS}")
+# print("ADMINISTRATION:", ADMINISTRATION)
