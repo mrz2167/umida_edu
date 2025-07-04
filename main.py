@@ -22,10 +22,6 @@ from aiogram.types import (
     KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove,
     BotCommand, BotCommandScopeDefault)
 
-from config import (
-    BOT_TOKEN, OWNER_ID, ADMIN_IDS, ADMIN_ESTER,
-    ADMINISTRATION, ALL_ADMINS, ADMIN_GROUP_ID)
-
 from db import (
     check_user_role, add_user_role, add_course, add_lesson, update_homework_status,
     update_course_title, update_course_description, get_all_courses, get_next_lesson,
@@ -38,6 +34,10 @@ from db import (
     send_homework_for_redo, get_lesson_workbook, get_lesson_extra_materials, get_user_lesson_in_progress,
     check_homework, SessionLocal, get_first_course, get_lesson_by_id, update_user_lesson_status,
     save_recommendation_letter, User, )
+
+from config import (
+    BOT_TOKEN, OWNER_ID, ADMIN_IDS, ADMIN_ESTER,
+    ADMINISTRATION, ALL_ADMINS, ADMIN_GROUP_ID)
 
 from welcome_message import welcome_parts
 from utils import ensure_topic, generate_topics_for_old_users
