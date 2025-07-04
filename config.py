@@ -44,7 +44,7 @@ ADMINISTRATION = {
     "ADMIN_ESTER": ADMIN_ESTER
 }
 
-# print(f"Owner ID: {OWNER_ID}")
+print(f"Owner ID: {OWNER_ID}")
 # print(f"Admin Esther ID: {ADMIN_ESTER}")
 # print(f"Admin IDs: {ADMIN_IDS}")
 # print("ADMINISTRATION:", ADMINISTRATION)

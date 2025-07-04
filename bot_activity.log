@@ -36,3 +36,182 @@ client_session: <aiohttp.client.ClientSession object at 0x7f16b7a501a0>
 2025-07-04 11:24:28,060 - Unclosed connector
 connections: ['deque([(<aiohttp.client_proto.ResponseHandler object at 0x7f16b7bdba70>, 9474.345563727)])']
 connector: <aiohttp.connector.TCPConnector object at 0x7f16b7b57a10>
+2025-07-04 11:26:53,199 - 🔁 Logger initialized
+2025-07-04 11:26:53,219 - Start polling
+2025-07-04 11:26:53,537 - Run polling for bot @umid_akademiyasi_bot id=8113715412 - 'umid_akademiyasi_bot'
+2025-07-04 11:26:53,662 - Update id=295030800 is not handled. Duration 12 ms by bot id=8113715412
+2025-07-04 11:26:57,806 - Received SIGINT signal
+2025-07-04 11:26:57,808 - Polling stopped for bot @umid_akademiyasi_bot id=8113715412 - 'umid_akademiyasi_bot'
+2025-07-04 11:26:57,809 - Polling stopped
+2025-07-04 12:19:58,861 - 🔁 Logger initialized
+2025-07-04 12:19:58,882 - Start polling
+2025-07-04 12:19:59,204 - Run polling for bot @umid_akademiyasi_bot id=8113715412 - 'umid_akademiyasi_bot'
+2025-07-04 12:19:59,338 - [IN] From 7357608040 | Text: /menu
+2025-07-04 12:19:59,738 - [IN] From 44319692 | Text: /menu
+2025-07-04 12:20:00,119 - [IN] From 6774411424 | Text: /start
+2025-07-04 12:20:00,502 - [IN] From 6774411424 | Text: /start
+2025-07-04 12:20:00,884 - [IN] From 6774411424 | Text: /start
+2025-07-04 12:20:01,265 - [IN] From 6774411424 | Text: /start
+2025-07-04 12:20:01,676 - Update id=295030807 is not handled. Duration 2342 ms by bot id=8113715412
+2025-07-04 12:20:01,677 - [IN] From 7357608040 | Text: /feedback
+2025-07-04 12:20:01,680 - [IN] From 7357608040 | Text: /feedback
+2025-07-04 12:20:02,111 - Update id=295030806 is handled. Duration 2778 ms by bot id=8113715412
+2025-07-04 12:20:02,112 - Update id=295030808 is handled. Duration 2776 ms by bot id=8113715412
+2025-07-04 12:20:02,114 - Update id=295030801 is handled. Duration 2784 ms by bot id=8113715412
+2025-07-04 12:20:02,115 - Update id=295030809 is handled. Duration 2778 ms by bot id=8113715412
+2025-07-04 12:20:02,143 - Update id=295030810 is handled. Duration 2806 ms by bot id=8113715412
+2025-07-04 12:20:02,147 - Update id=295030803 is handled. Duration 2814 ms by bot id=8113715412
+2025-07-04 12:20:02,168 - Update id=295030802 is handled. Duration 2837 ms by bot id=8113715412
+2025-07-04 12:20:02,168 - Update id=295030811 is handled. Duration 2831 ms by bot id=8113715412
+2025-07-04 12:20:03,657 - Received SIGINT signal
+2025-07-04 12:20:03,658 - Polling stopped for bot @umid_akademiyasi_bot id=8113715412 - 'umid_akademiyasi_bot'
+2025-07-04 12:20:03,659 - Polling stopped
+2025-07-04 12:23:02,282 - 🔁 Logger initialized
+2025-07-04 12:23:02,304 - Start polling
+2025-07-04 12:23:02,626 - Run polling for bot @umid_akademiyasi_bot id=8113715412 - 'umid_akademiyasi_bot'
+2025-07-04 12:23:02,750 - [IN] From 44319692 | Text: /menu
+2025-07-04 12:23:03,147 - Update id=295030813 is not handled. Duration 398 ms by bot id=8113715412
+2025-07-04 12:23:03,516 - Update id=295030812 is handled. Duration 769 ms by bot id=8113715412
+2025-07-04 12:25:57,219 - Update id=295030814 is handled. Duration 3458 ms by bot id=8113715412
+2025-07-04 12:28:35,093 - Received SIGINT signal
+2025-07-04 12:28:35,096 - Polling stopped for bot @umid_akademiyasi_bot id=8113715412 - 'umid_akademiyasi_bot'
+2025-07-04 12:28:35,096 - Polling stopped
+2025-07-04 12:28:51,599 - 🔁 Logger initialized
+2025-07-04 12:28:51,627 - Start polling
+2025-07-04 12:28:51,961 - Run polling for bot @umid_akademiyasi_bot id=8113715412 - 'umid_akademiyasi_bot'
+2025-07-04 12:30:02,821 - Received SIGINT signal
+2025-07-04 12:30:02,823 - Polling stopped for bot @umid_akademiyasi_bot id=8113715412 - 'umid_akademiyasi_bot'
+2025-07-04 12:30:02,823 - Polling stopped
+2025-07-04 12:33:47,637 - 🔁 Logger initialized
+2025-07-04 12:33:47,662 - Start polling
+2025-07-04 12:33:47,978 - Run polling for bot @umid_akademiyasi_bot id=8113715412 - 'umid_akademiyasi_bot'
+2025-07-04 12:34:05,529 - [IN] From 44319692 | Text: /menu
+2025-07-04 12:34:06,279 - Update id=295030815 is handled. Duration 751 ms by bot id=8113715412
+2025-07-04 12:34:15,346 - [IN] From 6774411424 | Text: /menu
+2025-07-04 12:34:15,478 - Update id=295030816 is handled. Duration 132 ms by bot id=8113715412
+2025-07-04 12:34:17,909 - [IN] From 6774411424 | Text: /courses
+2025-07-04 12:34:17,910 - Update id=295030817 is not handled. Duration 13 ms by bot id=8113715412
+2025-07-04 12:34:17,910 - Cause exception while process update id=295030817 by bot id=8113715412
+AttributeError: 'list' object has no attribute 'values'
+Traceback (most recent call last):
+  File "/home/mrz/Desktop/Projects/edu_project_umida/.venv/lib/python3.13/site-packages/aiogram/dispatcher/dispatcher.py", line 309, in _process_update
+    response = await self.feed_update(bot, update, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mrz/Desktop/Projects/edu_project_umida/.venv/lib/python3.13/site-packages/aiogram/dispatcher/dispatcher.py", line 158, in feed_update
+    response = await self.update.wrap_outer_middleware(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/home/mrz/Desktop/Projects/edu_project_umida/.venv/lib/python3.13/site-packages/aiogram/dispatcher/middlewares/error.py", line 25, in __call__
+    return await handler(event, data)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mrz/Desktop/Projects/edu_project_umida/.venv/lib/python3.13/site-packages/aiogram/dispatcher/middlewares/user_context.py", line 56, in __call__
+    return await handler(event, data)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mrz/Desktop/Projects/edu_project_umida/.venv/lib/python3.13/site-packages/aiogram/fsm/middleware.py", line 42, in __call__
+    return await handler(event, data)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mrz/Desktop/Projects/edu_project_umida/.venv/lib/python3.13/site-packages/aiogram/dispatcher/event/telegram.py", line 121, in trigger
+    return await wrapped_inner(event, kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mrz/Desktop/Projects/edu_project_umida/.venv/lib/python3.13/site-packages/aiogram/dispatcher/event/handler.py", line 43, in call
+    return await wrapped()
+           ^^^^^^^^^^^^^^^
+  File "/home/mrz/Desktop/Projects/edu_project_umida/.venv/lib/python3.13/site-packages/aiogram/dispatcher/dispatcher.py", line 276, in _listen_update
+    return await self.propagate_event(update_type=update_type, event=event, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mrz/Desktop/Projects/edu_project_umida/.venv/lib/python3.13/site-packages/aiogram/dispatcher/router.py", line 146, in propagate_event
+    return await observer.wrap_outer_middleware(_wrapped, event=event, data=kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mrz/Desktop/Projects/edu_project_umida/.venv/lib/python3.13/site-packages/aiogram/dispatcher/router.py", line 141, in _wrapped
+    return await self._propagate_event(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        observer=observer, update_type=update_type, event=telegram_event, **data
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/mrz/Desktop/Projects/edu_project_umida/.venv/lib/python3.13/site-packages/aiogram/dispatcher/router.py", line 166, in _propagate_event
+    response = await observer.trigger(event, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mrz/Desktop/Projects/edu_project_umida/.venv/lib/python3.13/site-packages/aiogram/dispatcher/event/telegram.py", line 121, in trigger
+    return await wrapped_inner(event, kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mrz/Desktop/Projects/edu_project_umida/main.py", line 72, in __call__
+    return await handler(event, data)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mrz/Desktop/Projects/edu_project_umida/.venv/lib/python3.13/site-packages/aiogram/dispatcher/event/handler.py", line 43, in call
+    return await wrapped()
+           ^^^^^^^^^^^^^^^
+  File "/home/mrz/Desktop/Projects/edu_project_umida/main.py", line 1507, in show_courses
+    if user_id not in ALL_ADMINS.values():
+                      ^^^^^^^^^^^^^^^^^
+AttributeError: 'list' object has no attribute 'values'
+2025-07-04 12:34:21,939 - Update id=295030818 is handled. Duration 1328 ms by bot id=8113715412
+2025-07-04 12:34:22,345 - [IN] From 6774411424 | Text: /courses
+2025-07-04 12:34:22,345 - Update id=295030819 is not handled. Duration 8 ms by bot id=8113715412
+2025-07-04 12:34:22,345 - Cause exception while process update id=295030819 by bot id=8113715412
+AttributeError: 'list' object has no attribute 'values'
+Traceback (most recent call last):
+  File "/home/mrz/Desktop/Projects/edu_project_umida/.venv/lib/python3.13/site-packages/aiogram/dispatcher/dispatcher.py", line 309, in _process_update
+    response = await self.feed_update(bot, update, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mrz/Desktop/Projects/edu_project_umida/.venv/lib/python3.13/site-packages/aiogram/dispatcher/dispatcher.py", line 158, in feed_update
+    response = await self.update.wrap_outer_middleware(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/home/mrz/Desktop/Projects/edu_project_umida/.venv/lib/python3.13/site-packages/aiogram/dispatcher/middlewares/error.py", line 25, in __call__
+    return await handler(event, data)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mrz/Desktop/Projects/edu_project_umida/.venv/lib/python3.13/site-packages/aiogram/dispatcher/middlewares/user_context.py", line 56, in __call__
+    return await handler(event, data)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mrz/Desktop/Projects/edu_project_umida/.venv/lib/python3.13/site-packages/aiogram/fsm/middleware.py", line 42, in __call__
+    return await handler(event, data)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mrz/Desktop/Projects/edu_project_umida/.venv/lib/python3.13/site-packages/aiogram/dispatcher/event/telegram.py", line 121, in trigger
+    return await wrapped_inner(event, kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mrz/Desktop/Projects/edu_project_umida/.venv/lib/python3.13/site-packages/aiogram/dispatcher/event/handler.py", line 43, in call
+    return await wrapped()
+           ^^^^^^^^^^^^^^^
+  File "/home/mrz/Desktop/Projects/edu_project_umida/.venv/lib/python3.13/site-packages/aiogram/dispatcher/dispatcher.py", line 276, in _listen_update
+    return await self.propagate_event(update_type=update_type, event=event, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mrz/Desktop/Projects/edu_project_umida/.venv/lib/python3.13/site-packages/aiogram/dispatcher/router.py", line 146, in propagate_event
+    return await observer.wrap_outer_middleware(_wrapped, event=event, data=kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mrz/Desktop/Projects/edu_project_umida/.venv/lib/python3.13/site-packages/aiogram/dispatcher/router.py", line 141, in _wrapped
+    return await self._propagate_event(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        observer=observer, update_type=update_type, event=telegram_event, **data
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/mrz/Desktop/Projects/edu_project_umida/.venv/lib/python3.13/site-packages/aiogram/dispatcher/router.py", line 166, in _propagate_event
+    response = await observer.trigger(event, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mrz/Desktop/Projects/edu_project_umida/.venv/lib/python3.13/site-packages/aiogram/dispatcher/event/telegram.py", line 121, in trigger
+    return await wrapped_inner(event, kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mrz/Desktop/Projects/edu_project_umida/main.py", line 72, in __call__
+    return await handler(event, data)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mrz/Desktop/Projects/edu_project_umida/.venv/lib/python3.13/site-packages/aiogram/dispatcher/event/handler.py", line 43, in call
+    return await wrapped()
+           ^^^^^^^^^^^^^^^
+  File "/home/mrz/Desktop/Projects/edu_project_umida/main.py", line 1507, in show_courses
+    if user_id not in ALL_ADMINS.values():
+                      ^^^^^^^^^^^^^^^^^
+AttributeError: 'list' object has no attribute 'values'
+2025-07-04 12:34:35,586 - [IN] From 6774411424 | Text: /sync_lessons
+2025-07-04 12:34:37,253 - Update id=295030820 is handled. Duration 1671 ms by bot id=8113715412
+2025-07-04 12:34:42,442 - [IN] From 6774411424 | Text: /start
+2025-07-04 12:34:42,949 - Update id=295030821 is handled. Duration 507 ms by bot id=8113715412
+2025-07-04 12:34:54,247 - Update id=295030822 is handled. Duration 1453 ms by bot id=8113715412
+2025-07-04 12:34:58,099 - Update id=295030823 is handled. Duration 1166 ms by bot id=8113715412
+2025-07-04 12:35:17,329 - Received SIGINT signal
+2025-07-04 12:35:17,331 - Polling stopped for bot @umid_akademiyasi_bot id=8113715412 - 'umid_akademiyasi_bot'
+2025-07-04 12:35:17,331 - Polling stopped
