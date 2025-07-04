@@ -1636,31 +1636,31 @@ async def send_bulk_message(bot, user_ids: list[int], text: str):
         await asyncio.sleep(0.4)
 
 
-async def send_warning(bot, user_ids: list[int]):
-    text = """Бот фаолиятини янгилади. Дарсларни ўтишда давом этишингиз мумкин."""
-    for user_id in user_ids:
-        try:
-            await bot.send_message(user_id, text)
-            print(f"✅ Юборилди: {user_id}")
-        except (TelegramForbiddenError, TelegramBadRequest) as e:
-            print(f"🚫 Ўтказилди: {user_id} | {e}")
-        await asyncio.sleep(0.3)
+# async def send_warning(bot, user_ids: list[int]):
+#     text = """Бот фаолиятини янгилади. Дарсларни ўтишда давом этишингиз мумкин."""
+#     for user_id in user_ids:
+#         try:
+#             await bot.send_message(user_id, text)
+#             print(f"✅ Юборилди: {user_id}")
+#         except (TelegramForbiddenError, TelegramBadRequest) as e:
+#             print(f"🚫 Ўтказилди: {user_id} | {e}")
+#         await asyncio.sleep(0.3)
 
-def get_all_user_ids():
-    try:
-        with SessionLocal() as session:
-            return [user.id for user in session.query(User).all()]
-    except Exception as e:
-        print(f"❗ DB error: {e}")
-        return []
+# def get_all_user_ids():
+#     try:
+#         with SessionLocal() as session:
+#             return [user.id for user in session.query(User).all()]
+#     except Exception as e:
+#         print(f"❗ DB error: {e}")
+#         return []
 
 
 async def main():
     dp.message.middleware(MessageLoggerMiddleware())
-    # await dp.start_polling(bot)
+    await dp.start_polling(bot)
 
-    user_ids = get_all_user_ids()
-    await send_warning(bot, user_ids)
+    # user_ids = get_all_user_ids()
+    # await send_warning(bot, user_ids)
 
 
 if __name__ == "__main__":
