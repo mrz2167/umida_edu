@@ -215,3 +215,11 @@ AttributeError: 'list' object has no attribute 'values'
 2025-07-04 12:35:17,329 - Received SIGINT signal
 2025-07-04 12:35:17,331 - Polling stopped for bot @umid_akademiyasi_bot id=8113715412 - 'umid_akademiyasi_bot'
 2025-07-04 12:35:17,331 - Polling stopped
+2025-07-04 12:41:54,376 - 🔁 Logger initialized
+2025-07-04 12:41:54,401 - Start polling
+2025-07-04 12:41:54,740 - Run polling for bot @umid_akademiyasi_bot id=8113715412 - 'umid_akademiyasi_bot'
+2025-07-04 12:41:54,858 - [IN] From 6774411424 | Text: /start
+2025-07-04 12:41:55,672 - Update id=295030824 is handled. Duration 815 ms by bot id=8113715412
+2025-07-04 12:42:09,200 - Received SIGINT signal
+2025-07-04 12:42:09,201 - Polling stopped for bot @umid_akademiyasi_bot id=8113715412 - 'umid_akademiyasi_bot'
+2025-07-04 12:42:09,202 - Polling stopped

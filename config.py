@@ -2,12 +2,25 @@ import os
 import psycopg2
 from dotenv import load_dotenv
 load_dotenv()
+from urllib.parse import urlparse
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+
+def get_conn():
+    parsed = urlparse(DATABASE_URL)
+    return psycopg2.connect(
+        dbname=parsed.path[1:],
+        user=parsed.username,
+        password=parsed.password,
+        host=parsed.hostname,
+        port=parsed.port
+    )
+
+
 def get_owner_id():
-    conn = psycopg2.connect(DATABASE_URL)
+    conn = get_conn()
     cur = conn.cursor()
     cur.execute("SELECT id FROM users WHERE role = 'owner' LIMIT 1")
     row = cur.fetchone()
@@ -16,7 +29,7 @@ def get_owner_id():
     return row[0] if row else None
 
 def get_admin_ids():
-    conn = psycopg2.connect(DATABASE_URL)
+    conn = get_conn()
     cur = conn.cursor()
     cur.execute("SELECT id FROM users WHERE role = 'admin'")
     admin_ids = [row[0] for row in cur.fetchall()]
@@ -26,7 +39,7 @@ def get_admin_ids():
 
 def get_admin_ester_id():
     """Получает ID администратора Esther (специальный админ)"""
-    conn = psycopg2.connect(DATABASE_URL)
+    conn = get_conn()
     cur = conn.cursor()
     cur.execute("SELECT id FROM users WHERE role = 'Ester' LIMIT 1")
     row = cur.fetchone()
