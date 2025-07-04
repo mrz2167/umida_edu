@@ -10,13 +10,14 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 def get_conn():
     parsed = urlparse(DATABASE_URL)
-    return psycopg2.connect(
+    psycopg2.connect(
         dbname=parsed.path[1:],
         user=parsed.username,
         password=parsed.password,
         host=parsed.hostname,
         port=parsed.port
     )
+
 
 
 def get_owner_id():
